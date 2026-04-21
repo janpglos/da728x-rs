@@ -29,6 +29,7 @@ embassy-rp = { version = "0.9", features = ["defmt", "time-driver", "rp2040", "c
 embassy-futures = { version = "0.1" }
 
 da728x = { path = "../../", features = ["debug"] }
+da728x-examples-common = { path = "../common" }
 
 defmt = "1.0"
 defmt-rtt = "1.0"

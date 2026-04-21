@@ -211,12 +211,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "da728x-examples-common"
+version = "0.1.0"
+dependencies = [
+ "da728x",
+ "defmt",
+ "embassy-time",
+ "embedded-hal-async",
+]
+
+[[package]]
 name = "da728x-rp2040-examples"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "da728x",
+ "da728x-examples-common",
  "defmt",
  "defmt-rtt",
  "embassy-executor",

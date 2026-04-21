@@ -1,0 +1,12 @@
+[package]
+name = "da728x-examples-common"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+da728x = { path = "../../" }
+embedded-hal-async = "1.0.0"
+embassy-time = "0.5"
+defmt = "1.0"
