@@ -242,7 +242,7 @@ where
         // Set PID coefficients if provided
         if actuator_config.pid_Kp.is_some() && actuator_config.pid_Ki.is_some(){
             let pid_kp = actuator_config.pid_Kp.unwrap();
-            let pid_ki = actuator_config.pid_Kp.unwrap();
+            let pid_ki = actuator_config.pid_Ki.unwrap();
 
             let pid_kp_h = ((pid_kp >> 7) & 0xFF) as u8;
             let pid_kp_l = (pid_kp & 0x7F) as u8;
@@ -286,15 +286,15 @@ where
         if device_config.driving_mode == DrivingMode::WIDEBAND || device_config.driving_mode == DrivingMode::CUSTOM_WAVEFORM {
             let frq_phase_h = FRQ_PHASE_H::from(0x00);
             let frq_phase_l = FRQ_PHASE_L::new().with_DELAY_SHIFT_L(0x00).with_DELAY_FREEZE(true);
-            self.write_register(Register::FRQ_PHASE_H, frq_phase_h.into());
-            self.write_register(Register::FRQ_PHASE_L, frq_phase_l.into());
+            self.write_register(Register::FRQ_PHASE_H, frq_phase_h.into()).await?;
+            self.write_register(Register::FRQ_PHASE_L, frq_phase_l.into()).await?;
         }
 
         if device_config.driving_mode == DrivingMode::CUSTOM_WAVEFORM {
             let seq_ctl1 = SEQ_CTL1::new().with_WAVEGEN_MODE(true);
             let top_cfg4 = TOP_CFG4::new().with_V2I_FACTOR_FREEZE(true); // Unclear if TST_CALIB_IMPEDANCE_DIS should be true/false.
-            self.write_register(Register::SEQ_CTL1, seq_ctl1.into());
-            self.write_register(Register::TOP_CFG4, top_cfg4.into());
+            self.write_register(Register::SEQ_CTL1, seq_ctl1.into()).await?;
+            self.write_register(Register::TOP_CFG4, top_cfg4.into()).await?;
         }
 
         self.actuator_config = Some(actuator_config);
@@ -314,7 +314,7 @@ where
         let irq_event_seq_diag = IRQ_EVENT_SEQ_DIAG::from(self.read_register(Register::IRQ_EVENT_SEQ_DIAG).await?);
 
         // Clear events (only IRQ_EVENT1)
-        self.write_register(Register::IRQ_EVENT1, 0xFF);
+        self.write_register(Register::IRQ_EVENT1, 0xFF).await?;
 
         Ok((irq_event1, irq_event_warning_diag, irq_event_seq_diag))
     }
