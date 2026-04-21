@@ -25,6 +25,11 @@ use crate::registers::SEQ_CTL2;
 use crate::registers::TOP_CFG2;
 use crate::registers::TOP_CFG4;
 use crate::registers::TOP_CTL2;
+use crate::registers::TOP_INT_CFG6_H;
+use crate::registers::TOP_INT_CFG6_L;
+use crate::registers::TOP_INT_CFG7_H;
+use crate::registers::TOP_INT_CFG7_L;
+use crate::registers::TRIM4;
 use crate::waveform::WaveformMemory;
 
 pub enum Variant {
@@ -177,8 +182,7 @@ where
         let actuator1 = ACTUATOR1::from(volt_converted);
         self.write_register(Register::ACTUATOR1, actuator1.into()).await?;
 
-
-        // ACTUATOR2 (as max volt)
+        // ACTUATOR2 (abs max volt)
         let volt_converted = ((actuator_config.absolute_max_mV as u32 * 1000) / 23400) as u8; // +1?
         let actuator2 = ACTUATOR2::from(volt_converted);
         self.write_register(Register::ACTUATOR2, actuator2.into()).await?;
@@ -196,6 +200,68 @@ where
         let calib_v2i_l = CALIB_V2I_L::from(bytes[1]);
         self.write_register(Register::CALIB_V2I_H, calib_v2i_h.into()).await?;
         self.write_register(Register::CALIB_V2I_L, calib_v2i_l.into()).await?;
+
+        // Setting TRIM4: LOOP_FILT_RES_TRIM and LOOP_FILT_CAP_TRIM
+        // See Table 15 and Table 16 in Section 5.7.9 of the Datasheet
+        // TODO: If inductance_uH > 1000 (1mH), we should also set LOOP_FILT_LOW_BW to 1 in TRIM3
+        let cap_trim = match actuator_config.inductance_uH {
+            0..=17 => 3,
+            18..=27 => 2,
+            28..=40 => 1,
+            _ => 0
+        };
+        // Table 16: LOOP_FILT_RES_TRIM lookup
+        // Bin Lseries into 25 μH steps: ≤25, 50, 75, …, ≥250
+        let l_idx = (actuator_config.inductance_uH.saturating_sub(13) / 25).min(9) as usize;
+        // ≤25 50  75 100 125 150 175 200 225 ≥250
+        let res_trim: u8 = match actuator_config.impedance_mOhm * 1000 {
+            0..=5   => [2, 2, 3, 3, 3, 3, 3, 3, 3, 3][l_idx],
+            6..=7   => [1, 2, 2, 3, 3, 3, 3, 3, 3, 3][l_idx],
+            8..=9   => [1, 2, 2, 2, 3, 3, 3, 3, 3, 3][l_idx],
+            10..=11 => [0, 1, 2, 2, 2, 3, 3, 3, 3, 3][l_idx],
+            12..=13 => [0, 1, 2, 2, 2, 2, 3, 3, 3, 3][l_idx],
+            14..=15 => [0, 1, 1, 2, 2, 2, 2, 3, 3, 3][l_idx],
+            16..=17 => [0, 1, 1, 2, 2, 2, 2, 2, 3, 3][l_idx],
+            18..=19 => [0, 0, 1, 1, 2, 2, 2, 2, 2, 3][l_idx],
+            20..=21 => [0, 1, 1, 2, 2, 2, 3, 3, 3, 3][l_idx],
+            22..=23 => [0, 1, 1, 2, 2, 2, 2, 3, 3, 3][l_idx],
+            24..=25 => [0, 1, 1, 2, 2, 2, 2, 3, 3, 3][l_idx],
+            26..=27 => [0, 1, 1, 2, 2, 2, 2, 2, 3, 3][l_idx],
+            28..=31 => [0, 1, 2, 2, 2, 3, 3, 3, 3, 3][l_idx],
+            32..=33 => [0, 1, 2, 2, 2, 2, 3, 3, 3, 3][l_idx],
+            34..=35 => [0, 1, 1, 2, 2, 2, 3, 3, 3, 3][l_idx],
+            36..=41 => [0, 1, 1, 2, 2, 2, 2, 3, 3, 3][l_idx],
+            42..=45 => [0, 1, 2, 2, 3, 3, 3, 3, 3, 3][l_idx],
+            _       => [0, 1, 2, 2, 2, 3, 3, 3, 3, 3][l_idx], // 46-50+
+        };
+
+        let trim4 = TRIM4::new().with_LOOP_FILT_CAP_TRIM(cap_trim).with_LOOP_FILT_RES_TRIM(res_trim);
+        self.write_register(Register::TRIM4, trim4.into()).await?;
+
+
+        // Set PID coefficients if provided
+        if actuator_config.pid_Kp.is_some() && actuator_config.pid_Ki.is_some(){
+            let pid_kp = actuator_config.pid_Kp.unwrap();
+            let pid_ki = actuator_config.pid_Kp.unwrap();
+
+            let pid_kp_h = ((pid_kp >> 7) & 0xFF) as u8;
+            let pid_kp_l = (pid_kp & 0x7F) as u8;
+            let pid_ki_h = ((pid_ki >> 7) & 0xFF) as u8;
+            let pid_ki_l = (pid_ki & 0x7F) as u8;
+
+            let top_int_cfg6_h = TOP_INT_CFG6_H::from(pid_kp_h);
+            let top_int_cfg6_l = TOP_INT_CFG6_L::from(pid_kp_l);
+            let top_int_cfg7_h = TOP_INT_CFG7_H::from(pid_ki_h);
+            let top_int_cfg7_l = TOP_INT_CFG7_L::from(pid_ki_l);
+
+            self.write_register(Register::TOP_INT_CFG6_H, top_int_cfg6_h.into()).await?;
+            self.write_register(Register::TOP_INT_CFG6_L, top_int_cfg6_l.into()).await?;
+            self.write_register(Register::TOP_INT_CFG7_H, top_int_cfg7_h.into()).await?;
+            self.write_register(Register::TOP_INT_CFG7_L, top_int_cfg7_l.into()).await?;
+        }
+
+        // TODO: additional registers may need to be set with
+        // acceleration and rapid stop enabled
 
         // Default resonant frequency
         let frequency_converted =  (1000000000 / (actuator_config.frequency_Hz as u32 * 1333)) as u16;

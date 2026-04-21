@@ -45,7 +45,10 @@ async fn main(_spawner: Spawner) {
         absolute_max_mV: 2_260,
         max_current_mA: 165,
         impedance_mOhm: 13_800,
+        inductance_uH: 50, // Just a guess
         frequency_Hz: 170,
+        pid_Ki: None,
+        pid_Kp: None
     };
 
     let device_config = DeviceConfig {

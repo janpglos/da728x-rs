@@ -1,3 +1,5 @@
+use core::option::Option;
+
 #[allow(non_snake_case)]
 #[derive(Debug, Clone, Copy)]
 pub struct ActuatorConfig
@@ -7,7 +9,10 @@ pub struct ActuatorConfig
     pub absolute_max_mV: u16, 
     pub max_current_mA: u16,
     pub impedance_mOhm: u16,
-    pub frequency_Hz: u16
+    pub inductance_uH: u16,
+    pub frequency_Hz: u16,
+    pub pid_Kp: Option<u16>,
+    pub pid_Ki: Option<u16> 
 }
 
 #[allow(nonstandard_style)]

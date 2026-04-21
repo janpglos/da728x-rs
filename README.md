@@ -19,10 +19,10 @@ An async and no_std rust library for the wide-bandwidth haptic driver IC DA7280/
 - Reading and clearing system events and diagnostics
 - Driving an LRA in frequency track, wideband or custom waveform mode
 - DRO mode
+- Uploading into the waveform memory and RTWM_MODE
 
 ## What's missing
 - Testing of PWM_MODE
-- Uploading into the waveform memory and RTWM_MODE
 - GPI configuration and ETWM_MODE
 - Uploading a script (list of registers and values as exported by GUI)
 
@@ -49,7 +49,10 @@ An async and no_std rust library for the wide-bandwidth haptic driver IC DA7280/
         absolute_max_mV: 2_260,
         max_current_mA: 165,
         impedance_mOhm: 13_800,
+        inductance_uH: 50,
         frequency_Hz: 170,
+        pid_Ki: None,
+        pid_Kp: None
     };
 
     // DRO Mode, which means we can set the amplitude via set_override_value()

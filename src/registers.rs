@@ -24,7 +24,10 @@ pub enum Register {
     TOP_CFG1 = 0x13,
     TOP_CFG2 = 0x14,
     TOP_CFG4 = 0x16,
-    TOP_INT_CFG1 = 0x17,
+    TOP_INT_CFG6_H = 0x1C,
+    TOP_INT_CFG6_L = 0x1D,
+    TOP_INT_CFG7_H = 0x1E,
+    TOP_INT_CFG7_L = 0x1F,
     TOP_CTL1 = 0x22,
     TOP_CTL2 = 0x23,
     SEQ_CTL1 = 0x24,
@@ -40,6 +43,7 @@ pub enum Register {
     POLARITY = 0x43,
     FRQ_PHASE_H = 0x48,
     FRQ_PHASE_L = 0x49,
+    TRIM4 = 0x60,
     TOP_CFG5 = 0x6E,
     IRQ_MASK2 = 0x83,
     SNP_MEM_0 = 0x84,
@@ -207,13 +211,28 @@ pub struct TOP_CFG4 {
     pub V2I_FACTOR_FREEZE: bool,
 }
 
-/// TOP_INT_CFG1 register (0x17)
+/// TOP_INT_CFG6_H register (0x1C)
 #[bitfield(u8)]
-pub struct TOP_INT_CFG1 {
-    #[bits(2)]
-    pub BEMF_FAULT_LIM: u8,
-    #[bits(6)]
-    __: u8,
+pub struct TOP_INT_CFG6_H {
+    pub FRQ_PID_Kp_H: u8,
+}
+
+/// TOP_INT_CFG6_L register (0x1D)
+#[bitfield(u8)]
+pub struct TOP_INT_CFG6_L {
+    pub FRQ_PID_Kp_L: u8,
+}
+
+/// TOP_INT_CFG7_H register (0x1E)
+#[bitfield(u8)]
+pub struct TOP_INT_CFG7_H {
+    pub FRQ_PID_Ki_H: u8,
+}
+
+/// TOP_INT_CFG7_L register (0x1F)
+#[bitfield(u8)]
+pub struct TOP_INT_CFG7_L {
+    pub FRQ_PID_Ki_L: u8,
 }
 
 /// TOP_CTL1 register (0x22)
@@ -315,6 +334,17 @@ pub struct FRQ_PHASE_L {
     #[bits(4)]
     __: u8,
     pub DELAY_FREEZE: bool
+}
+
+/// TRIM4 register (0x60)
+#[bitfield(u8)]
+pub struct TRIM4{
+    #[bits(2)]
+    pub LOOP_FILT_RES_TRIM: u8,
+    #[bits(2)]
+    pub LOOP_FILT_CAP_TRIM: u8,
+    #[bits(4)]
+    __: u8,
 }
 
 /// TOP_CFG5 register (0x6E)
