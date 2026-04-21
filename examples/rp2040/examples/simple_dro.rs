@@ -27,9 +27,8 @@
 //! # Fault Recovery
 //!
 //! The driver enables `EMBEDDED_MODE` which allows automatic fault clearing
-//! when the device enters IDLE state. If a fault occurs (e.g., from an unloaded
-//! actuator), the example recovers by briefly disabling and re-enabling the
-//! device, which triggers the auto-clear mechanism.
+//! when the device enters IDLE state. The shared `handle_faults()` function
+//! disables and re-enables the device to trigger auto-clear.
 //!
 //! # Running
 //!
@@ -44,11 +43,10 @@ use defmt::*;
 use embassy_executor::Spawner;
 use embassy_rp::i2c::{self, Config, I2c};
 use embassy_rp::peripherals::I2C0;
-use embassy_time::Timer;
 use {defmt_rtt as _, panic_probe as _};
 
-use da728x::config::{ActuatorConfig, ActuatorType, DeviceConfig, DrivingMode, OperationMode};
 use da728x::{Variant, DA728x};
+use da728x_examples_common as common;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -73,58 +71,14 @@ async fn main(_spawner: Spawner) {
         .unwrap();
     info!("DA7280 initialized successfully.");
 
-    // Configure actuator - these values work well with the SparkFun board's LRA
-    let actuator_config = ActuatorConfig {
-        actuator_type: ActuatorType::LRA,
-        nominal_max_mV: 1800,
-        absolute_max_mV: 2000,
-        max_current_mA: 120,
-        impedance_mOhm: 15000,
-        frequency_Hz: 170,
-    };
-
-    // Configure for DRO mode with frequency tracking
-    let device_config = DeviceConfig {
-        operation_mode: OperationMode::DRO_MODE,
-        driving_mode: DrivingMode::FREQUENCY_TRACK,
-        acceleration: false,
-        rapid_stop: false,
-    };
-
-    haptics.configure(actuator_config, device_config).await.unwrap();
+    haptics.configure(
+        common::config::sparkfun_lra_config(),
+        common::config::dro_frequency_track(),
+    ).await.unwrap();
     haptics.enable().await.unwrap();
     info!("DRO mode enabled.");
 
-    // Main loop - generate simple pulses
-    loop {
-        info!("Pulse!");
-
-        // Set amplitude to maximum (127 = 100%)
-        haptics.set_override_value(127).await.unwrap();
-        Timer::after_millis(100).await;
-
-        // Turn off
-        haptics.set_override_value(0).await.unwrap();
-        Timer::after_millis(400).await;
-
-        // Check for errors
-        // Note: EMBEDDED_MODE is enabled, so faults auto-clear when going to IDLE.
-        // If a fault occurs, disable briefly to trigger auto-clear, then re-enable.
-        let (events, warnings, _) = haptics.get_events().await.unwrap();
-        if events.E_ACTUATOR_FAULT() {
-            warn!("ACTUATOR FAULT - Is the actuator loaded? Auto-recovering...");
-
-            // Disable to enter IDLE state (triggers auto-clear via EMBEDDED_MODE)
-            haptics.disable().await.unwrap();
-            Timer::after_millis(50).await;
-            haptics.enable().await.unwrap();
-
-            info!("Recovery complete - pulses will resume when actuator is loaded");
-        }
-        if events.E_WARNING() {
-            warn!("Warning: {:?}", warnings);
-        }
-    }
+    common::demo::run_dro_demo(&mut haptics).await;
 }
 
 embassy_rp::bind_interrupts!(struct Irqs {

@@ -27,9 +27,8 @@
 //! # Fault Recovery
 //!
 //! The driver enables `EMBEDDED_MODE` which allows automatic fault clearing
-//! when the device enters IDLE state. If a fault occurs (e.g., from an unloaded
-//! actuator), the example recovers by briefly disabling and re-enabling the
-//! device, which triggers the auto-clear mechanism.
+//! when the device enters IDLE state. The shared `handle_faults()` function
+//! disables and re-enables the device to trigger auto-clear.
 //!
 //! # WIDEBAND vs FREQUENCY_TRACK
 //!
@@ -51,19 +50,10 @@ use defmt::*;
 use embassy_executor::Spawner;
 use embassy_rp::i2c::{self, Config, I2c};
 use embassy_rp::peripherals::I2C0;
-use embassy_time::Timer;
 use {defmt_rtt as _, panic_probe as _};
 
-use da728x::config::{ActuatorConfig, ActuatorType, DeviceConfig, DrivingMode, OperationMode};
 use da728x::{Variant, DA728x};
-
-/// Tetris Theme (Korobeiniki) melody - frequency in Hz and duration in ms.
-const TETRIS_MELODY: &[(u16, u64)] = &[
-    (659, 150), (494, 75), (523, 75), (587, 150), (523, 75), (494, 75),
-    (440, 150), (440, 75), (523, 75), (659, 150), (587, 75), (523, 75),
-    (494, 225), (523, 75), (587, 150), (659, 150),
-    (523, 150), (440, 150), (440, 150),
-];
+use da728x_examples_common as common;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -88,66 +78,14 @@ async fn main(_spawner: Spawner) {
         .unwrap();
     info!("DA7280 initialized successfully.");
 
-    // Configure actuator - these values work well with the SparkFun board's LRA
-    let actuator_config = ActuatorConfig {
-        actuator_type: ActuatorType::LRA,
-        nominal_max_mV: 1800,
-        absolute_max_mV: 2000,
-        max_current_mA: 120,
-        impedance_mOhm: 15000,
-        frequency_Hz: 170,
-    };
-
-    // Configure for DRO mode with WIDEBAND (allows arbitrary frequencies)
-    let device_config = DeviceConfig {
-        operation_mode: OperationMode::DRO_MODE,
-        driving_mode: DrivingMode::WIDEBAND,
-        acceleration: false,
-        rapid_stop: false,
-    };
-
-    haptics.configure(actuator_config, device_config).await.unwrap();
+    haptics.configure(
+        common::config::sparkfun_lra_config(),
+        common::config::dro_wideband(),
+    ).await.unwrap();
     haptics.enable().await.unwrap();
     info!("Wideband DRO mode enabled.");
 
-    loop {
-        info!("Playing Tetris melody...");
-
-        for &(freq, duration) in TETRIS_MELODY.iter() {
-            // Set frequency for this note
-            haptics.set_frequency(freq).await.unwrap();
-
-            // Play note at full amplitude
-            haptics.set_override_value(127).await.unwrap();
-            Timer::after_millis(duration).await;
-
-            // Brief silence between notes
-            haptics.set_override_value(0).await.unwrap();
-            Timer::after_millis(50).await;
-        }
-
-        info!("Melody complete!");
-
-        // Check for errors and recover if needed
-        // EMBEDDED_MODE is enabled, so faults auto-clear when going to IDLE.
-        let (events, warnings, _) = haptics.get_events().await.unwrap();
-        if events.E_ACTUATOR_FAULT() {
-            warn!("ACTUATOR FAULT - Is the actuator loaded? Auto-recovering...");
-
-            // Disable to enter IDLE state (triggers auto-clear via EMBEDDED_MODE)
-            haptics.disable().await.unwrap();
-            Timer::after_millis(50).await;
-            haptics.enable().await.unwrap();
-
-            info!("Recovery complete - melody will resume when actuator is loaded");
-        }
-        if events.E_WARNING() {
-            warn!("Warning: {:?}", warnings);
-        }
-
-        // Wait before repeating
-        Timer::after_millis(2000).await;
-    }
+    common::demo::run_melody_demo(&mut haptics, common::melody::TETRIS_MELODY).await;
 }
 
 embassy_rp::bind_interrupts!(struct Irqs {

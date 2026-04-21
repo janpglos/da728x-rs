@@ -1,4 +1,4 @@
-//! Simple RTWM (Register-Triggered Waveform Memory) example.
+//! Simple RTWM (Register-Triggered Waveform Memory) example on nRF54L15.
 //!
 //! This example demonstrates the basics of waveform memory:
 //! - Creating a simple snippet (waveform shape)
@@ -8,31 +8,8 @@
 //!
 //! # Hardware Setup
 //!
-//! This example is designed for the **SparkFun Qwiic Haptic Driver (DA7280)**
-//! connected to an RP2040 board via I2C.
-//!
-//! - DA7280 connected via I2C0 (SDA: GP16, SCL: GP17)
+//! - DA7280 connected via TWIM (SERIAL20, SDA: P1.10, SCL: P1.11)
 //! - I2C address: 0x4A (default)
-//!
-//! # Important: Actuator Loading
-//!
-//! The LRA actuator **must be mechanically loaded** (compressed between two
-//! surfaces) for proper operation. When unloaded:
-//!
-//! - Waveforms may not play correctly
-//! - You will see `ACTUATOR FAULT` warnings in the logs
-//! - This is expected behavior - the DA7280 uses back-EMF sensing to detect
-//!   abnormal actuator conditions
-//!
-//! To test properly, place the haptic motor between two solid objects (e.g.,
-//! hold it pressed against a table with your finger).
-//!
-//! # Fault Recovery
-//!
-//! The driver enables `EMBEDDED_MODE` which allows automatic fault clearing
-//! when the device enters IDLE state. If a fault occurs (e.g., from an unloaded
-//! actuator), the example recovers by briefly disabling and re-enabling the
-//! device, which triggers the auto-clear mechanism.
 //!
 //! # Waveform Memory Concepts
 //!
@@ -52,9 +29,10 @@
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_rp::i2c::{self, Config, I2c};
-use embassy_rp::peripherals::I2C0;
+use embassy_nrf::twim::{self, Twim};
+use embassy_nrf::{bind_interrupts, peripherals};
 use embassy_time::Timer;
+use static_cell::ConstStaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
 use da728x::waveform::{
@@ -63,25 +41,30 @@ use da728x::waveform::{
 use da728x::{Variant, DA728x};
 use da728x_examples_common as common;
 
+bind_interrupts!(struct Irqs {
+    SERIAL20 => twim::InterruptHandler<peripherals::SERIAL20>;
+});
+
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-    let p = embassy_rp::init(Default::default());
+    let p = embassy_nrf::init(Default::default());
 
-    info!("=== Simple Waveform (RTWM) Example ===");
+    info!("=== Simple Waveform (RTWM) Example (nRF54L15) ===");
     info!("Make sure the actuator is loaded (pressed between two surfaces)!");
 
-    // Initialize I2C
-    info!("Initializing I2C...");
-    let sda = p.PIN_16;
-    let scl = p.PIN_17;
-    let mut config = Config::default();
-    config.frequency = 400_000;
+    info!("Initializing TWI...");
+    static RAM_BUFFER: ConstStaticCell<[u8; 16]> = ConstStaticCell::new([0; 16]);
+    let twi = Twim::new(
+        p.SERIAL20,
+        Irqs,
+        p.P1_10,
+        p.P1_11,
+        twim::Config::default(),
+        RAM_BUFFER.take(),
+    );
 
-    let i2c = I2c::new_async(p.I2C0, scl, sda, Irqs, config);
-
-    // Initialize DA7280
     info!("Setting up DA7280 haptics driver...");
-    let mut haptics = DA728x::new(i2c, 0x4A, Variant::DA7280)
+    let mut haptics = DA728x::new(twi, 0x4A, Variant::DA7280)
         .await
         .unwrap();
     info!("DA7280 initialized successfully.");
@@ -91,17 +74,15 @@ async fn main(_spawner: Spawner) {
     // Build a simple click waveform
     info!("Building waveform memory...");
 
-    // Snippet 1: Simple click - quick rise and fall
     let click_snippet = SnippetBuilder::new()
-        .ramp(1, 15).unwrap()  // Rise to 100% in 1 timebase
-        .ramp(2, 0).unwrap()   // Fall to 0% in 2 timebases
+        .ramp(1, 15).unwrap()
+        .ramp(2, 0).unwrap()
         .build()
         .unwrap();
 
-    // Sequence 0: Play the click snippet once
-    let click_frame = FrameBuilder::new(1).unwrap()  // Snippet ID 1
+    let click_frame = FrameBuilder::new(1).unwrap()
         .gain(Gain::Full)
-        .timebase(Timebase::Ms21_76)  // ~22ms per timebase unit
+        .timebase(Timebase::Ms21_76)
         .build()
         .unwrap();
 
@@ -110,8 +91,7 @@ async fn main(_spawner: Spawner) {
         .build()
         .unwrap();
 
-    // Build memory with one snippet and one sequence
-    let memory = WaveformMemoryBuilder::new(false)  // acceleration disabled
+    let memory = WaveformMemoryBuilder::new(false)
         .add_snippet(click_snippet).unwrap()
         .add_sequence(click_sequence).unwrap()
         .build()
@@ -133,7 +113,6 @@ async fn main(_spawner: Spawner) {
     info!("Uploading waveform memory...");
     haptics.upload_waveform_memory(&memory, false).await.unwrap();
 
-    // Verify upload
     let mut readback = [0u8; 16];
     haptics.read_waveform_memory(memory.len(), &mut readback).await.unwrap();
     let expected = memory.as_bytes();
@@ -144,23 +123,15 @@ async fn main(_spawner: Spawner) {
         error!("Memory verification: FAILED");
     }
 
-    // Lock memory and enable
     haptics.lock_waveform_memory().await.unwrap();
     haptics.enable().await.unwrap();
     info!("RTWM enabled. Playing clicks...");
 
     loop {
         info!("Click!");
-
-        // Play sequence 0 with no extra loops
         haptics.play_sequence(0, 0).await.unwrap();
-
         Timer::after_millis(500).await;
 
-    common::demo::handle_faults(&mut haptics).await;
+        common::demo::handle_faults(&mut haptics).await;
     }
 }
-
-embassy_rp::bind_interrupts!(struct Irqs {
-    I2C0_IRQ => i2c::InterruptHandler<I2C0>;
-});
