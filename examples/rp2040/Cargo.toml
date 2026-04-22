@@ -22,6 +22,10 @@ path = "examples/simple_waveform.rs"
 name = "waveform_effects"
 path = "examples/waveform_effects.rs"
 
+[[example]]
+name = "waveform_memory"
+path = "examples/waveform_memory.rs"
+
 [dependencies]
 embassy-executor = { version = "0.9", features = ["arch-cortex-m", "executor-thread", "defmt"] }
 embassy-time = { version = "0.5", features = ["defmt", "defmt-timestamp-uptime"] }
