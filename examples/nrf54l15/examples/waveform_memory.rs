@@ -37,8 +37,8 @@ bind_interrupts!(struct Irqs {
 });
 
 // Auto-generated DA7280 waveform memory
-pub const DA7280_WAVEFORM_MEMORY:WaveformMemory = WaveformMemory {
-    data: [
+pub const DA7280_WAVEFORM_MEMORY: WaveformMemory = WaveformMemory::from_bytes(
+    [
         0x07, 0x0B, 0x14, 0x15, 0x16, 0x1A, 0x1E, 0x1F, 0x20, 0x23, 0x25, 0x27, 0x2D, 0x38, 0x39,
         0x40, 0x43, 0x47, 0x48, 0x49, 0x77, 0x29, 0x47, 0xF7, 0xF0, 0xF9, 0xF0, 0x77, 0x77, 0x70,
         0x70, 0xF7, 0xF0, 0x01, 0x88, 0x18, 0x01, 0x18, 0x03, 0x18, 0x03, 0x10, 0xB8, 0x31, 0x88,
@@ -47,10 +47,10 @@ pub const DA7280_WAVEFORM_MEMORY:WaveformMemory = WaveformMemory {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ],
-    len: 74,
-    num_snippets: 7,
-    num_sequences: 11
-};
+    74,
+    7,
+    11,
+);
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -77,9 +77,9 @@ async fn main(_spawner: Spawner) {
 
     info!(
         "Waveform memory: {} bytes, {} snippets, {} sequences",
-        DA7280_WAVEFORM_MEMORY.len,
-        DA7280_WAVEFORM_MEMORY.num_snippets,
-        DA7280_WAVEFORM_MEMORY.num_sequences
+        DA7280_WAVEFORM_MEMORY.len(),
+        DA7280_WAVEFORM_MEMORY.num_snippets(),
+        DA7280_WAVEFORM_MEMORY.num_sequences()
     );
 
     let device_config = common::config::rtwm_frequency_track();
@@ -106,8 +106,7 @@ async fn main(_spawner: Spawner) {
     info!("RTWM enabled. Playing effects...");
 
     loop {
-
-        for n in 0..DA7280_WAVEFORM_MEMORY.num_sequences {
+        for n in 0..DA7280_WAVEFORM_MEMORY.num_sequences() {
             info!("Sequence: {}", n);
             haptics.play_sequence(n, 0).await.unwrap();
             Timer::after_millis(5_000).await;
