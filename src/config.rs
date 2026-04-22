@@ -11,8 +11,7 @@ pub struct ActuatorConfig
     pub impedance_mOhm: u16,
     pub inductance_uH: u16,
     pub frequency_Hz: u16,
-    pub pid_Kp: Option<u16>,
-    pub pid_Ki: Option<u16> 
+    pub pid_Kp_Ki: Option<(u16, u16)>,
 }
 
 #[allow(nonstandard_style)]

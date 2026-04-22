@@ -240,9 +240,7 @@ where
 
 
         // Set PID coefficients if provided
-        if actuator_config.pid_Kp.is_some() && actuator_config.pid_Ki.is_some(){
-            let pid_kp = actuator_config.pid_Kp.unwrap();
-            let pid_ki = actuator_config.pid_Ki.unwrap();
+        if let Some((pid_kp,pid_ki)) = actuator_config.pid_Kp_Ki {
 
             let pid_kp_h = ((pid_kp >> 7) & 0xFF) as u8;
             let pid_kp_l = (pid_kp & 0x7F) as u8;
