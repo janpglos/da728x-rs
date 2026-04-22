@@ -26,36 +26,16 @@ pub const MAX_SEQUENCES: usize = 16;
 /// snippet or sequence.
 #[derive(Debug, Clone, Copy)]
 pub struct WaveformMemory {
-    data: [u8; MAX_MEMORY_SIZE],
-    len: u8,
-    num_snippets: u8,
-    num_sequences: u8,
+    pub data: [u8; MAX_MEMORY_SIZE],
+    pub len: u8,
+    pub num_snippets: u8,
+    pub num_sequences: u8,
 }
 
 impl WaveformMemory {
-    /// Get the total number of bytes in the waveform memory.
-    pub fn len(&self) -> usize {
-        self.len as usize
-    }
-
-    /// Check if the memory is empty.
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
     /// Get the raw bytes of the waveform memory.
     pub fn as_bytes(&self) -> &[u8] {
         &self.data[..self.len as usize]
-    }
-
-    /// Get the number of snippets.
-    pub fn num_snippets(&self) -> u8 {
-        self.num_snippets
-    }
-
-    /// Get the number of sequences.
-    pub fn num_sequences(&self) -> u8 {
-        self.num_sequences
     }
 }
 
