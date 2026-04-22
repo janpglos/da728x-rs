@@ -29,6 +29,14 @@ An async and no_std rust library for the wide-bandwidth haptic driver IC DA7280/
 ## Features
 - `debug` - Enable debug logging with the `defmt` crate
 
+
+## Waveform Builder
+![a screenshot of the builder UI](media/builder1.png "Waveform Builder")
+![a screenshot of the builder UI](media/builder.png "Waveform Builder")
+
+Included is a standalone waveform builder in the form of a web application to interactively build the snippets and sequences to build haptic patterns.
+Just open the [the waveform builder](tools/waveform_builder.html) file in your web-browser. Disclaimer: This was built with an LLM.
+
 # Usage
 ```rust
     use da728x::{DA728x, Variant};
