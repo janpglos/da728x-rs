@@ -59,8 +59,7 @@ Just open the [the waveform builder](tools/waveform_builder.html) file in your w
         impedance_mOhm: 13_800,
         inductance_uH: 50,
         frequency_Hz: 170,
-        pid_Ki: None,
-        pid_Kp: None
+        pid_Kp_Ki: None,
     };
 
     // DRO Mode, which means we can set the amplitude via set_override_value()

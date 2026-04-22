@@ -12,8 +12,7 @@ pub fn sparkfun_lra_config() -> ActuatorConfig {
         impedance_mOhm: 13_800,
         inductance_uH: 50,
         frequency_Hz: 170,
-        pid_Kp: None,
-        pid_Ki: None,
+        pid_Kp_Ki: None,
     }
 }
 
