@@ -1,15 +1,12 @@
-//! Complex waveform effects example on RP2040.
+//! Upload exported waveform memory on RP2040.
 //!
 //! This example shows how to upload the waveform as exported from the waveform builder
-//! See: example_waveforms.txt (TODO)
+//! See: tools/example_waveform_memory.txt
 //!
 //! # Hardware Setup
 //!
 //! - DA7280 connected via I2C0 (SDA: GP16, SCL: GP17)
 //! - I2C address: 0x4A (default)
-//!
-//! # Waveform Memory Layout
-//! TODO
 //!
 //! # Running
 //!
