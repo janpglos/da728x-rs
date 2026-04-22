@@ -1,8 +1,8 @@
 //! Waveform memory layout and construction.
 
-use crate::errors::Error;
-use super::snippet::Snippet;
 use super::sequence::Sequence;
+use super::snippet::Snippet;
+use crate::errors::Error;
 
 /// Maximum waveform memory size in bytes.
 pub const MAX_MEMORY_SIZE: usize = 100;
@@ -26,16 +26,50 @@ pub const MAX_SEQUENCES: usize = 16;
 /// snippet or sequence.
 #[derive(Debug, Clone, Copy)]
 pub struct WaveformMemory {
-    pub data: [u8; MAX_MEMORY_SIZE],
-    pub len: u8,
-    pub num_snippets: u8,
-    pub num_sequences: u8,
+    data: [u8; MAX_MEMORY_SIZE],
+    len: u8,
+    num_snippets: u8,
+    num_sequences: u8,
 }
 
 impl WaveformMemory {
+    pub const fn from_bytes(
+        data: [u8; MAX_MEMORY_SIZE],
+        len: u8,
+        num_snippets: u8,
+        num_sequences: u8,
+    ) -> Self {
+        WaveformMemory {
+            data,
+            len,
+            num_snippets,
+            num_sequences,
+        }
+    }
+
+    /// Get the total number of bytes in the waveform memory.
+    pub fn len(&self) -> usize {
+        self.len as usize
+    }
+
+    /// Check if the memory is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
     /// Get the raw bytes of the waveform memory.
     pub fn as_bytes(&self) -> &[u8] {
         &self.data[..self.len as usize]
+    }
+
+    /// Get the number of snippets.
+    pub fn num_snippets(&self) -> u8 {
+        self.num_snippets
+    }
+
+    /// Get the number of sequences.
+    pub fn num_sequences(&self) -> u8 {
+        self.num_sequences
     }
 }
 
@@ -254,13 +288,15 @@ impl WaveformMemoryBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::waveform::{SnippetBuilder, SequenceBuilder, FrameBuilder};
+    use crate::waveform::{FrameBuilder, SequenceBuilder, SnippetBuilder};
 
     #[test]
     fn test_memory_basic() {
         let snippet = SnippetBuilder::new()
-            .ramp(1, 15).unwrap()
-            .ramp(1, 0).unwrap()
+            .ramp(1, 15)
+            .unwrap()
+            .ramp(1, 0)
+            .unwrap()
             .build()
             .unwrap();
 
@@ -303,14 +339,13 @@ mod tests {
 
     #[test]
     fn test_memory_multiple_snippets() {
-        let snippet1 = SnippetBuilder::new()
-            .ramp(1, 15).unwrap()
-            .build()
-            .unwrap();
+        let snippet1 = SnippetBuilder::new().ramp(1, 15).unwrap().build().unwrap();
 
         let snippet2 = SnippetBuilder::new()
-            .step(2, 8).unwrap()
-            .ramp(1, 0).unwrap()
+            .step(2, 8)
+            .unwrap()
+            .ramp(1, 0)
+            .unwrap()
             .build()
             .unwrap();
 
@@ -342,8 +377,8 @@ mod tests {
         // Header
         assert_eq!(bytes[0], 2); // num_snippets
         assert_eq!(bytes[1], 1); // num_sequences
-        // End pointers (absolute indices)
-        // Data starts at byte 5 (2 header + 3 pointers)
+                                 // End pointers (absolute indices)
+                                 // Data starts at byte 5 (2 header + 3 pointers)
         assert_eq!(bytes[2], 5); // snippet 1 (1 byte at pos 5) ends at index 5
         assert_eq!(bytes[3], 7); // snippet 2 (2 bytes at pos 6-7) ends at index 7
         assert_eq!(bytes[4], 9); // sequence (2 bytes at pos 8-9) ends at index 9
@@ -354,17 +389,11 @@ mod tests {
         let mut builder = WaveformMemoryBuilder::new(true);
 
         for _ in 0..15 {
-            let snippet = SnippetBuilder::new()
-                .ramp(1, 15).unwrap()
-                .build()
-                .unwrap();
+            let snippet = SnippetBuilder::new().ramp(1, 15).unwrap().build().unwrap();
             builder = builder.add_snippet(snippet).unwrap();
         }
 
-        let snippet = SnippetBuilder::new()
-            .ramp(1, 15).unwrap()
-            .build()
-            .unwrap();
+        let snippet = SnippetBuilder::new().ramp(1, 15).unwrap().build().unwrap();
 
         assert!(matches!(
             builder.add_snippet(snippet),
@@ -391,10 +420,7 @@ mod tests {
 
     #[test]
     fn test_memory_no_sequences() {
-        let snippet = SnippetBuilder::new()
-            .ramp(1, 15).unwrap()
-            .build()
-            .unwrap();
+        let snippet = SnippetBuilder::new().ramp(1, 15).unwrap().build().unwrap();
 
         let result = WaveformMemoryBuilder::new(true)
             .add_snippet(snippet)
@@ -410,10 +436,7 @@ mod tests {
         assert_eq!(builder.next_snippet_id(), 1);
         assert_eq!(builder.next_sequence_id(), 0);
 
-        let snippet = SnippetBuilder::new()
-            .ramp(1, 15).unwrap()
-            .build()
-            .unwrap();
+        let snippet = SnippetBuilder::new().ramp(1, 15).unwrap().build().unwrap();
 
         let builder = builder.add_snippet(snippet).unwrap();
         assert_eq!(builder.next_snippet_id(), 2);
