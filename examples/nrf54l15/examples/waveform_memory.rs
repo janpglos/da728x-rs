@@ -1,15 +1,13 @@
-//! Complex waveform effects example on nRF54L15.
+//! Upload exported waveform memory on nRF54L15.
 //!
 //! This example shows how to upload the waveform as exported from the waveform builder
-//! See: example_waveforms.txt (TODO)
+//! See: tools/example_waveform_memory.txt
 //!
 //! # Hardware Setup
 //!
 //! - DA7280 connected via TWIM (SERIAL20, SDA: P1.10, SCL: P1.11)
 //! - I2C address: 0x4A (default)
 //!
-//! # Waveform Memory Layout
-//! TODO
 //!
 //! # Running
 //!
