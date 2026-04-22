@@ -1986,14 +1986,17 @@ function drawSequencePreview(cv, seq, opts) {
   plan.forEach((seg, segIdx) => {
     const snp = seg.snpId === 0 ? null : state.snippets[seg.snpId - 1];
     const ampStart = (segIdx === 0) ? 0 : prevAmpNorm;
-    verts.push({ x: px(seg.startMs), y: yMap(ampStart * seg.gainMul), fi: seg.fi });
     if (!snp || snp.points.length === 0) {
       // Silence / empty snippet: step immediately to 0, then hold.
+      // Skip the carryover vertex so the cross-frame bridge draws a clean
+      // vertical step from the previous frame's end directly down to 0,
+      // regardless of this frame's gain.
       verts.push({ x: px(seg.startMs), y: yMap(0), fi: seg.fi });
       verts.push({ x: px(seg.startMs + seg.durMs), y: yMap(0), fi: seg.fi });
       prevAmpNorm = 0;
       return;
     }
+    verts.push({ x: px(seg.startMs), y: yMap(ampStart * seg.gainMul), fi: seg.fi });
     let segTbElapsed = 0;
     let ampHere = (seg.it === 0 && segIdx === 0) ? 0 : prevAmpNorm;
     for (const pt of snp.points) {
