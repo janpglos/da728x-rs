@@ -1,0 +1,2438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DA7280 Waveform Memory Builder</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2029;
+    --panel-2: #222a36;
+    --border: #2d3643;
+    --accent: #4fc3f7;
+    --accent-2: #7fd9ff;
+    --ok: #66bb6a;
+    --warn: #ffa726;
+    --err: #ef5350;
+    --muted: #8a95a8;
+    --text: #e6edf5;
+    --snp: #7e57c2;
+    --seq: #26a69a;
+    --hdr: #ffb74d;
+    --empty: #3d4754;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  * { box-sizing: border-box; }
+  header.app {
+    background: linear-gradient(180deg, #1a2029, #151a22);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 10;
+  }
+  header.app h1 {
+    font-size: 15px; font-weight: 600; margin: 0;
+    letter-spacing: 0.3px;
+  }
+  header.app h1 .sub { color: var(--muted); font-weight: 400; margin-left: 8px; }
+  .config {
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  }
+  .config label {
+    display: flex; gap: 6px; align-items: center;
+    font-size: 12px; color: var(--muted);
+  }
+  .config select, .config input {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 12px;
+    font-family: var(--mono);
+  }
+  .spacer { flex: 1; }
+  .header-mem {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .header-mem-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 56px;
+    text-align: right;
+  }
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 12px;
+  }
+  .col { display: flex; flex-direction: column; gap: 12px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .card > header {
+    background: var(--panel-2);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card > header h2 {
+    font-size: 13px; font-weight: 600; margin: 0;
+    letter-spacing: 0.3px;
+  }
+  .card > header .meta { color: var(--muted); font-size: 11px; margin-left: 6px; }
+  .card > .body { padding: 10px 12px; }
+  button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  button:hover { background: #2b3442; border-color: #3a4554; }
+  button:active { transform: translateY(1px); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #0a1118; font-weight: 600; }
+  button.primary:hover { background: var(--accent-2); }
+  button.danger { background: transparent; color: var(--err); border-color: #5a2a2a; }
+  button.danger:hover { background: #3a1d1d; }
+  button.ghost { background: transparent; }
+  button.small { padding: 2px 6px; font-size: 11px; }
+  .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .list {
+    display: flex; flex-direction: column; gap: 4px;
+    max-height: 260px; overflow-y: auto;
+  }
+  .list-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .list-item:hover { border-color: #3a4554; }
+  .list-item.active { border-color: var(--accent); background: #1e2a35; }
+  .list-item .idx { font-family: var(--mono); color: var(--muted); font-size: 11px; min-width: 42px; }
+  .list-item .preview { flex: 1; font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list-item .tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(127, 217, 255, 0.15);
+    color: var(--accent-2);
+  }
+  table.editor {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  table.editor th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 500;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  table.editor td {
+    padding: 3px 4px;
+    border-bottom: 1px solid #20272f;
+  }
+  table.editor input, table.editor select {
+    width: 100%;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 3px 5px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  table.editor input[type="number"] { text-align: right; }
+  table.editor td.num { text-align: right; color: var(--muted); font-size: 11px; width: 28px; }
+  table.editor td.actions { width: 34px; text-align: right; }
+  table.editor tr.row-snp0 td { color: var(--muted); font-style: italic; }
+  table.editor td.drag-handle {
+    cursor: grab;
+    user-select: none;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: left;
+    width: 44px;
+    padding: 0 4px 0 6px;
+    white-space: nowrap;
+  }
+  table.editor td.drag-handle::before {
+    content: '⋮⋮';
+    color: #6a7686;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0;
+    margin-right: 6px;
+    vertical-align: middle;
+    line-height: 0;
+  }
+  table.editor td.drag-handle:hover::before { color: var(--accent); }
+  table.editor td.drag-handle:active { cursor: grabbing; }
+  table.editor tr.dragging { opacity: 0.35; }
+  table.editor tr.drop-above > td { border-top: 2px solid var(--accent); }
+  table.editor tr.drop-below > td { border-bottom: 2px solid var(--accent); }
+  table.editor button.icon-btn {
+    padding: 2px 5px;
+    line-height: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  table.editor button.icon-btn svg { display: block; }
+  canvas.preview {
+    width: 100%;
+    background: #0a0f15;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    display: block;
+  }
+  .mem-map {
+    display: grid;
+    grid-template-columns: repeat(20, 1fr);
+    gap: 2px;
+  }
+  .mem-cell {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    background: var(--empty);
+    position: relative;
+    cursor: default;
+    font-size: 9px;
+    font-family: var(--mono);
+    display: flex; align-items: center; justify-content: center;
+    color: #0a1118;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .mem-cell.hdr-nsnp { background: #ff7043; }
+  .mem-cell.hdr-nseq { background: #ff5722; }
+  .mem-cell.hdr-snp-ptr { background: var(--hdr); }
+  .mem-cell.hdr-seq-ptr { background: #fdd835; }
+  .mem-cell.snp { background: var(--snp); color: #fff; }
+  .mem-cell.seq { background: var(--seq); }
+  .mem-cell.overflow { background: var(--err); color: #fff; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .legend span.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  .hex-out, .c-out, .import-in {
+    width: 100%;
+    background: #0a0f15;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    resize: vertical;
+    min-height: 160px;
+    max-height: 440px;
+    line-height: 1.5;
+  }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .tab {
+    padding: 6px 12px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  /* Top-level tabs (snippets / sequences) */
+  .ttabs { display: flex; gap: 4px; }
+  .ttab {
+    padding: 8px 14px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    letter-spacing: 0.3px;
+  }
+  .ttab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .ttab .count {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .ttab.active .count { background: rgba(79, 195, 247, 0.15); color: var(--accent-2); }
+  .ttab-panel { display: none; }
+  .ttab-panel.active { display: block; }
+  /* Tiles for snippets/sequences */
+  .tile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+  }
+  .tile {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 0.1s, background 0.1s;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .tile:hover { border-color: #3a4554; background: #252e3b; }
+  .tile.active { border-color: var(--accent); background: #1e2a35; box-shadow: 0 0 0 1px var(--accent) inset; }
+  .tile.snp.active { border-color: var(--snp); box-shadow: 0 0 0 1px var(--snp) inset; }
+  .tile.seq.active { border-color: var(--seq); box-shadow: 0 0 0 1px var(--seq) inset; }
+  .tile-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  }
+  .tile-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .tile.snp .tile-title { color: var(--snp); }
+  .tile.seq .tile-title { color: var(--seq); }
+  .tile-meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .tile canvas {
+    width: 100%;
+    height: 100px;
+    background: #0a0f15;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    display: block;
+  }
+  .tile-preview {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+  }
+  .tile-new {
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .tile-new:hover { border-color: var(--accent); color: var(--accent); background: rgba(79, 195, 247, 0.04); }
+  .file-drop {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .file-drop input[type="file"] { display: none; }
+  .file-drop label.file-btn {
+    padding: 4px 10px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .file-drop label.file-btn:hover { background: #2b3442; border-color: #3a4554; }
+  .file-drop.dragging { border-color: var(--accent); background: rgba(79, 195, 247, 0.05); color: var(--accent); }
+  .meter {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px;
+  }
+  .meter-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--panel-2);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .meter-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--ok), var(--warn));
+    transition: width 0.15s;
+  }
+  .meter-fill.over { background: var(--err); }
+  .validation {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.6;
+  }
+  .validation .ok { color: var(--ok); }
+  .validation .warn { color: var(--warn); }
+  .validation .err { color: var(--err); }
+  .empty-state { color: var(--muted); text-align: center; padding: 16px; font-size: 12px; }
+  .chip {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-family: var(--mono);
+    border-radius: 3px;
+    background: rgba(127, 217, 255, 0.12);
+    color: var(--accent-2);
+    margin-left: 4px;
+  }
+  .field-group {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 6px 10px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .field-group label { color: var(--muted); font-size: 11.5px; }
+  .field-group input, .field-group select {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 4px 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .help {
+    color: var(--muted);
+    font-size: 11px;
+    margin: 6px 0 0 0;
+    line-height: 1.5;
+  }
+  details.byte-detail {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    margin-top: 6px;
+  }
+  details.byte-detail summary { cursor: pointer; color: var(--muted); }
+  .flex { display: flex; gap: 8px; align-items: center; }
+  .kv { font-family: var(--mono); font-size: 11.5px; }
+  .kv .k { color: var(--muted); }
+  .kv .v { color: var(--text); margin-left: 4px; }
+  .toast {
+    position: fixed; bottom: 16px; right: 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.2s;
+    z-index: 100;
+    max-width: 360px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.err { border-left-color: var(--err); }
+  .toast.ok { border-left-color: var(--ok); }
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="app">
+  <h1>DA7280 Waveform Memory Builder <span class="sub">· 100-byte haptic sequence composer</span></h1>
+  <div class="spacer"></div>
+  <div class="header-mem" title="Waveform memory fill">
+    <span class="header-mem-label" id="header-mem-label">0 / 100 B</span>
+    <div class="meter-bar" style="width: 140px;"><div class="meter-fill" id="header-mem-fill" style="width: 0%;"></div></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="config">
+    <label>
+      ACCELERATION_EN
+      <select id="cfg-accel">
+        <option value="1" selected>1 · AMP unsigned 0–15</option>
+        <option value="0">0 · AMP signed −7…+7</option>
+      </select>
+    </label>
+    <label>
+      FREQ_WAVEFORM_TIMEBASE
+      <select id="cfg-fwtb">
+        <option value="0" selected>0 · 5.44/21.76/43.52/87.04 ms</option>
+        <option value="1">1 · 1.36/5.44/21.76/43.52 ms</option>
+      </select>
+    </label>
+  </div>
+</header>
+
+<main>
+  <div class="col">
+    <!-- LEFT: SNIPPETS + SEQUENCES + MEMORY (tabbed) -->
+    <section class="card">
+      <header style="padding: 0 12px;">
+        <div class="ttabs" style="flex: 1;">
+          <button class="ttab active" data-ttab="memory">Memory &amp; I/O</button>
+          <button class="ttab" data-ttab="snippets">Snippets <span class="count" id="snp-count">0</span></button>
+          <button class="ttab" data-ttab="sequences">Sequences <span class="count" id="seq-count">0</span></button>
+        </div>
+        <div class="btn-row">
+          <button class="small" id="snp-add" style="display: none;">+ Add snippet</button>
+          <button class="small" id="seq-add" style="display: none;">+ Add sequence</button>
+        </div>
+      </header>
+      <div class="body">
+        <div class="ttab-panel" data-ttab="snippets">
+          <div class="tile-grid" id="snp-tiles"></div>
+        </div>
+        <div class="ttab-panel" data-ttab="sequences">
+          <div class="tile-grid" id="seq-tiles"></div>
+        </div>
+        <div class="ttab-panel active" data-ttab="memory">
+          <!-- MEMORY MAP -->
+          <div style="margin-bottom: 14px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom: 8px;">
+              <h3 style="margin:0; font-size: 13px; font-weight: 600;">Memory map</h3>
+              <span class="meta" id="mem-meta">0 / 100 bytes</span>
+            </div>
+            <div class="meter">
+              <div class="meter-bar"><div class="meter-fill" id="mem-fill" style="width: 0%;"></div></div>
+              <span class="kv" id="mem-count">0 / 100</span>
+            </div>
+            <div class="mem-map" id="mem-map" style="margin-top: 10px;"></div>
+            <div class="legend">
+              <div><span class="sw" style="background: #ff7043;"></span>num_snippets</div>
+              <div><span class="sw" style="background: #ff5722;"></span>num_sequences</div>
+              <div><span class="sw" style="background: var(--hdr);"></span>snippet pointers</div>
+              <div><span class="sw" style="background: #fdd835;"></span>sequence pointers</div>
+              <div><span class="sw" style="background: var(--snp);"></span>snippet data</div>
+              <div><span class="sw" style="background: var(--seq);"></span>sequence data</div>
+              <div><span class="sw" style="background: var(--empty);"></span>unused</div>
+              <div><span class="sw" style="background: var(--err);"></span>overflow</div>
+            </div>
+            <div class="validation" id="validation" style="margin-top: 10px;"></div>
+          </div>
+
+          <!-- IMPORT / EXPORT -->
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom: 8px;">
+              <h3 style="margin:0; font-size: 13px; font-weight: 600;">Import / Export</h3>
+              <div class="spacer" style="flex:1"></div>
+              <div class="btn-row">
+                <button class="small" id="btn-clear">Clear all</button>
+                <button class="small" id="btn-example">Load example</button>
+              </div>
+            </div>
+            <div class="tabs">
+              <button class="tab active" data-tab="import">Import</button>
+              <button class="tab" data-tab="export-hex">Hex writes</button>
+              <button class="tab" data-tab="export-c">C array</button>
+              <button class="tab" data-tab="export-rust">Rust array</button>
+              <button class="tab" data-tab="raw">Raw bytes</button>
+            </div>
+            <div class="tab-panel active" data-tab="import">
+              <div class="file-drop" id="file-drop">
+                <label class="file-btn" for="file-input">Choose .txt file</label>
+                <input type="file" id="file-input" accept=".txt,.hex,text/plain">
+                <span id="file-label">…or drop a .txt file here / paste below</span>
+              </div>
+              <textarea class="import-in" id="import-in" placeholder="Paste 'WRITE DA7280 0x84 0x06' style lines, or raw hex bytes..."></textarea>
+              <div class="btn-row" style="margin-top: 6px;">
+                <button class="primary small" id="btn-import">Parse &amp; load</button>
+                <span class="help" id="import-status" style="margin: 0 0 0 8px;"></span>
+              </div>
+            </div>
+            <div class="tab-panel" data-tab="export-hex">
+              <textarea class="hex-out" id="export-hex" readonly></textarea>
+              <div class="btn-row" style="margin-top: 6px;">
+                <button class="small" onclick="copyText('export-hex')">Copy</button>
+                <button class="small" onclick="downloadText('export-hex', 'da7280_waveform.txt')">Download .txt</button>
+              </div>
+            </div>
+            <div class="tab-panel" data-tab="export-c">
+              <textarea class="c-out" id="export-c" readonly></textarea>
+              <div class="btn-row" style="margin-top: 6px;">
+                <button class="small" onclick="copyText('export-c')">Copy</button>
+                <button class="small" onclick="downloadText('export-c', 'da7280_waveform.h')">Download .h</button>
+              </div>
+            </div>
+            <div class="tab-panel" data-tab="export-rust">
+              <textarea class="c-out" id="export-rust" readonly></textarea>
+              <div class="btn-row" style="margin-top: 6px;">
+                <button class="small" onclick="copyText('export-rust')">Copy</button>
+                <button class="small" onclick="downloadText('export-rust', 'da7280_waveform.rs')">Download .rs</button>
+              </div>
+            </div>
+            <div class="tab-panel" data-tab="raw">
+              <textarea class="hex-out" id="export-raw" readonly></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="col">
+    <!-- RIGHT: EDITOR (with preview at top) -->
+    <section class="card" id="editor-card">
+      <header>
+        <h2 id="editor-title">Editor</h2>
+        <span class="meta" id="editor-label">—</span>
+      </header>
+      <div class="body" id="editor-body">
+        <canvas class="preview" id="preview-canvas" height="160"></canvas>
+        <p class="help" id="preview-help" style="margin-top: 8px;">Select a snippet or sequence from the left to start editing. The preview is approximate — actual LRA response depends on mechanical characteristics.</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================================
+// DA7280 Waveform Memory Builder
+// ----------------------------------------------------------------------------
+// State shape:
+//   state = {
+//     accelerationEn: 0|1,
+//     freqWaveformTimebase: 0|1,
+//     baseAddr: number (default 0x84),
+//     snippets: [ { points: [ { rmp, time, amp } ] } ],  // SNP_ID 1 = snippets[0]
+//     sequences: [ { frames: [ { snpId, gain, timebase, snpIdLoop, freqCmd, freq } ] } ],
+//     selection: { type: 'snippet'|'sequence'|null, index: number }
+//   }
+// ============================================================================
+
+const TIMEBASE_A = [5.44, 21.76, 43.52, 87.04];   // FREQ_WAVEFORM_TIMEBASE=0
+const TIMEBASE_B = [1.36, 5.44, 21.76, 43.52];    // FREQ_WAVEFORM_TIMEBASE=1
+const GAIN_DB    = [0, -6, -12, -18];
+const MAX_MEM    = 100;
+
+let state = {
+  accelerationEn: 1,
+  freqWaveformTimebase: 0,
+  baseAddr: 0x84,
+  snippets: [],
+  sequences: [],
+  selection: { type: null, index: -1 }
+};
+
+// ---------------------------------------------------------------------------
+// AMP interpretation
+// ---------------------------------------------------------------------------
+// Returns normalized amplitude in [-1, +1] (acceleration mode uses [0, +1])
+function ampToNorm(amp, accel) {
+  if (accel) {
+    // unsigned 0..15, 15 = 100%
+    return Math.max(0, Math.min(15, amp)) / 15;
+  }
+  // signed 4-bit 2's complement; -8 treated as -7
+  let v = amp & 0x0F;
+  if (v & 0x08) v = v - 16;     // sign-extend 4-bit to signed
+  if (v === -8) v = -7;
+  return v / 7;
+}
+
+// store-side amp value from a user-entered number (respecting current mode)
+function clampAmp(v, accel) {
+  v = Math.round(Number(v) || 0);
+  if (accel) return Math.max(0, Math.min(15, v));
+  return Math.max(-7, Math.min(7, v));
+}
+
+// convert store amp to raw 4-bit field
+function ampToRaw(amp, accel) {
+  if (accel) return amp & 0x0F;
+  // signed: store as 2's complement 4-bit
+  if (amp < 0) return (16 + amp) & 0x0F;
+  return amp & 0x0F;
+}
+
+// convert raw 4-bit to store amp
+function rawToAmp(raw, accel) {
+  raw = raw & 0x0F;
+  if (accel) return raw;
+  if (raw & 0x08) return raw - 16;
+  return raw;
+}
+
+// ---------------------------------------------------------------------------
+// PWL byte encoding
+// ---------------------------------------------------------------------------
+function pwlToByte(point, accel) {
+  const rmp = point.rmp ? 1 : 0;
+  const time = (point.time & 0x07);
+  const amp = ampToRaw(point.amp, accel);
+  return ((rmp & 1) << 7) | ((time & 0x07) << 4) | (amp & 0x0F);
+}
+
+function byteToPwl(b, accel) {
+  return {
+    rmp: (b >> 7) & 1,
+    time: (b >> 4) & 0x07,
+    amp: rawToAmp(b & 0x0F, accel)
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Frame encoding
+// ---------------------------------------------------------------------------
+function frameBytes(f) {
+  const needByte2 = (f.snpIdLoop > 0) || (f.snpId >= 8) || (f.freqCmd && f.freq !== undefined);
+  const bytes = [];
+  const b1 =
+    ((0 & 1) << 7) |
+    ((f.gain & 0x03) << 5) |
+    ((f.timebase & 0x03) << 3) |
+    (f.snpId & 0x07);
+  bytes.push(b1);
+  if (needByte2) {
+    const freqMsb = f.freqCmd ? ((f.freq >> 8) & 1) : 0;
+    const snpH = (f.snpId >> 3) & 1;
+    const b2 =
+      ((1 & 1) << 7) |
+      ((f.snpIdLoop & 0x0F) << 3) |
+      ((f.freqCmd ? 1 : 0) << 2) |
+      ((freqMsb & 1) << 1) |
+      (snpH & 1);
+    bytes.push(b2);
+    if (f.freqCmd) {
+      bytes.push(f.freq & 0xFF);
+    }
+  }
+  return bytes;
+}
+
+// Parse a contiguous sequence byte blob into an array of frames
+function parseFrames(bytes) {
+  const frames = [];
+  let i = 0;
+  while (i < bytes.length) {
+    const b1 = bytes[i];
+    if ((b1 >> 7) & 1) {
+      // stray byte 2 without byte 1 — treat as standalone, skip
+      i++;
+      continue;
+    }
+    const f = {
+      gain: (b1 >> 5) & 0x03,
+      timebase: (b1 >> 3) & 0x03,
+      snpId: b1 & 0x07,
+      snpIdLoop: 0,
+      freqCmd: false,
+      freq: 0
+    };
+    i++;
+    if (i < bytes.length && ((bytes[i] >> 7) & 1)) {
+      const b2 = bytes[i];
+      f.snpIdLoop = (b2 >> 3) & 0x0F;
+      f.freqCmd = ((b2 >> 2) & 1) === 1;
+      const freqMsb = (b2 >> 1) & 1;
+      const snpH = b2 & 1;
+      f.snpId |= (snpH << 3);
+      i++;
+      if (f.freqCmd) {
+        if (i < bytes.length) {
+          f.freq = (freqMsb << 8) | bytes[i];
+          i++;
+        } else {
+          f.freq = freqMsb << 8;
+        }
+      }
+    }
+    frames.push(f);
+  }
+  return frames;
+}
+
+// ---------------------------------------------------------------------------
+// Memory layout & encoding
+// ---------------------------------------------------------------------------
+function layoutMemory() {
+  // Build the 100-byte memory from state
+  const snps = state.snippets;
+  const seqs = state.sequences;
+  const nSnp = snps.length;
+  const nSeq = seqs.length;
+
+  // Header size: 2 + nSnp + nSeq
+  const mem = new Array(MAX_MEM).fill(0);
+  const regions = []; // {from, to, kind, label}
+
+  if (nSnp === 0 && nSeq === 0) {
+    return { mem, regions, totalUsed: 0, overflow: 0, snippetEnds: [], sequenceEnds: [] };
+  }
+
+  mem[0] = nSnp & 0xFF;
+  mem[1] = nSeq & 0xFF;
+  regions.push({ from: 0, to: 0, kind: 'hdr-nsnp', label: `num_snippets=${nSnp}` });
+  regions.push({ from: 1, to: 1, kind: 'hdr-nseq', label: `num_sequences=${nSeq}` });
+
+  const headerSize = 2 + nSnp + nSeq;
+
+  // First: lay out snippets
+  let cur = headerSize;
+  const snippetEnds = [];
+  for (let i = 0; i < nSnp; i++) {
+    const snp = snps[i];
+    if (snp.points.length === 0) {
+      // empty snippet — still needs at least 1 byte; emit a zero byte (silence)
+      mem[cur] = 0x00;
+      snippetEnds.push(cur);
+      regions.push({ from: cur, to: cur, kind: 'snp', label: `snippet ${i+1} (empty)` });
+      cur++;
+      continue;
+    }
+    const start = cur;
+    for (const p of snp.points) {
+      if (cur < MAX_MEM) mem[cur] = pwlToByte(p, state.accelerationEn);
+      cur++;
+    }
+    snippetEnds.push(cur - 1);
+    regions.push({ from: start, to: cur - 1, kind: 'snp', label: `snippet ${i+1}` });
+  }
+
+  // Then: sequences
+  const sequenceEnds = [];
+  for (let i = 0; i < nSeq; i++) {
+    const seq = seqs[i];
+    const start = cur;
+    if (seq.frames.length === 0) {
+      // Empty sequence — emit a single silence frame
+      mem[cur] = 0x00;
+      cur++;
+    } else {
+      for (const f of seq.frames) {
+        const bs = frameBytes(f);
+        for (const b of bs) {
+          if (cur < MAX_MEM) mem[cur] = b;
+          cur++;
+        }
+      }
+    }
+    sequenceEnds.push(cur - 1);
+    regions.push({ from: start, to: cur - 1, kind: 'seq', label: `sequence ${i}` });
+  }
+
+  // Now write header pointers
+  let p = 2;
+  for (let i = 0; i < nSnp; i++) {
+    mem[p] = snippetEnds[i] & 0xFF;
+    regions.push({ from: p, to: p, kind: 'hdr-snp-ptr', label: `snippet ${i+1} end → 0x${(snippetEnds[i]).toString(16).padStart(2,'0')}` });
+    p++;
+  }
+  for (let i = 0; i < nSeq; i++) {
+    mem[p] = sequenceEnds[i] & 0xFF;
+    regions.push({ from: p, to: p, kind: 'hdr-seq-ptr', label: `sequence ${i} end → 0x${(sequenceEnds[i]).toString(16).padStart(2,'0')}` });
+    p++;
+  }
+
+  const totalUsed = cur;
+  const overflow = Math.max(0, cur - MAX_MEM);
+  return { mem, regions, totalUsed, overflow, snippetEnds, sequenceEnds };
+}
+
+// ---------------------------------------------------------------------------
+// Encoder → hex writes & C array
+// ---------------------------------------------------------------------------
+function encodeHexWrites(mem, totalUsed, baseAddr) {
+  const lines = [];
+  // Emit all bytes up to (and including) the last used byte. Pad zeros already in mem.
+  const upto = Math.min(Math.max(totalUsed, 0), MAX_MEM);
+  for (let i = 0; i < upto; i++) {
+    const addr = (baseAddr + i) & 0xFF;
+    lines.push(`WRITE DA728x 0x${addr.toString(16).toUpperCase().padStart(2,'0')} 0x${mem[i].toString(16).toUpperCase().padStart(2,'0')}`);
+  }
+  // Always terminate with a zero byte sentinel if there's room (matches example convention)
+  // The provided example padded a few zero bytes at the end; we'll match up to used+4 capped to MAX_MEM
+  const pad = Math.min(MAX_MEM, upto + 4);
+  for (let i = upto; i < pad; i++) {
+    const addr = (baseAddr + i) & 0xFF;
+    lines.push(`WRITE DA728x 0x${addr.toString(16).toUpperCase().padStart(2,'0')} 0x${mem[i].toString(16).toUpperCase().padStart(2,'0')}`);
+  }
+  return lines.join('\n');
+}
+
+function encodeC(mem, totalUsed, baseAddr) {
+  const upto = Math.min(Math.max(totalUsed, 0), MAX_MEM);
+  const lines = [];
+  lines.push('/* Auto-generated DA7280 waveform memory */');
+  lines.push('');
+  lines.push(`static const uint8_t da7280_waveform_memory[${upto}] = {`);
+  for (let r = 0; r < upto; r += 8) {
+    const chunk = [];
+    for (let c = 0; c < 8 && (r + c) < upto; c++) {
+      chunk.push('0x' + mem[r + c].toString(16).toUpperCase().padStart(2, '0'));
+    }
+    const addrComment = `/* 0x${(baseAddr + r).toString(16).toUpperCase().padStart(2,'0')} */`;
+    lines.push('    ' + addrComment + ' ' + chunk.join(', ') + ',');
+  }
+  lines.push('};');
+  return lines.join('\n');
+}
+
+function encodeRust(mem, totalUsed, baseAddr) {
+  const upto = Math.min(Math.max(totalUsed, 0), MAX_MEM);
+  const lines = [];
+  lines.push('// Auto-generated DA7280 waveform memory');
+  lines.push('');
+  lines.push(`pub const DA7280_WAVEFORM_MEMORY: [u8; ${upto}] = [`);
+  for (let r = 0; r < upto; r += 8) {
+    const chunk = [];
+    for (let c = 0; c < 8 && (r + c) < upto; c++) {
+      chunk.push('0x' + mem[r + c].toString(16).toUpperCase().padStart(2, '0'));
+    }
+    const addrComment = `/* 0x${(baseAddr + r).toString(16).toUpperCase().padStart(2, '0')} */`;
+    lines.push('    ' + addrComment + ' ' + chunk.join(', ') + ',');
+  }
+  lines.push('];');
+  return lines.join('\n');
+}
+
+function encodeRawBytes(mem, totalUsed) {
+  const upto = Math.min(Math.max(totalUsed, 0), MAX_MEM);
+  const parts = [];
+  for (let i = 0; i < upto; i++) {
+    parts.push(mem[i].toString(16).toUpperCase().padStart(2, '0'));
+  }
+  // Format 16 per line
+  const lines = [];
+  for (let i = 0; i < parts.length; i += 16) {
+    lines.push(parts.slice(i, i + 16).join(' '));
+  }
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Parser: import WRITE DA7280/DA728x 0xAA 0xBB lines OR raw hex
+// ---------------------------------------------------------------------------
+// The waveform memory lives at registers 0x84-0xE7. Files may contain full-IC
+// configuration writes (registers 0x00-0x83) — those are used to detect
+// ACCELERATION_EN (via TOP_CFG2 0x14 bit[4] MEM_DATA_SIGNED) and
+// FREQ_WAVEFORM_TIMEBASE (via SEQ_CTL1 0x24 bit[2]) but do not populate the
+// 100-byte waveform memory image.
+const WAV_MEM_BASE = 0x84;
+const WAV_MEM_END  = 0x84 + 100 - 1; // 0xE7
+
+function parseImport(text) {
+  const bytes = [];        // [{addr, value}] — all register writes found
+  const rawOnly = [];      // for no-address fallback
+  // Accept "DA7280", "DA728x", or any DA728[0-9a-f] — some log formats
+  // substitute the device id digit.
+  const writeRe = /write\s+da728[0-9a-fx]\s+0x([0-9a-f]{1,2})\s+0x([0-9a-f]{1,2})/ig;
+  let m;
+  while ((m = writeRe.exec(text)) !== null) {
+    bytes.push({ addr: parseInt(m[1], 16), value: parseInt(m[2], 16) });
+  }
+  if (bytes.length === 0) {
+    // try raw hex bytes
+    const rawRe = /(?:0x)?([0-9a-f]{2})(?![0-9a-f])/ig;
+    while ((m = rawRe.exec(text)) !== null) {
+      rawOnly.push(parseInt(m[1], 16));
+    }
+    if (rawOnly.length === 0) return null;
+  }
+
+  // Detect IC config hints from the full stream BEFORE filtering to
+  // waveform memory. Last write wins (mimics actual bring-up sequence).
+  let detectedAccel = null;         // 0 or 1 if register 0x14 seen
+  let detectedFwtb  = null;         // 0 or 1 if register 0x24 seen
+  for (const { addr, value } of bytes) {
+    if (addr === 0x14) {
+      // bit[4] MEM_DATA_SIGNED: 0 -> ACCELERATION_EN=1, 1 -> ACCELERATION_EN=0
+      detectedAccel = ((value >> 4) & 1) ? 0 : 1;
+    } else if (addr === 0x24) {
+      // bit[2] FREQ_WAVEFORM_TIMEBASE
+      detectedFwtb = (value >> 2) & 1;
+    }
+  }
+
+  // Build 100-byte waveform image. Waveform memory lives at 0x84-0xE7; pin
+  // base there and ignore writes outside that range. If no waveform-memory
+  // writes are present but raw bytes are, populate from raw starting at 0.
+  const mem = new Array(MAX_MEM).fill(0);
+  const base = WAV_MEM_BASE;
+  const wavWrites = bytes.filter(b => b.addr >= WAV_MEM_BASE && b.addr <= WAV_MEM_END);
+  if (wavWrites.length > 0) {
+    for (const { addr, value } of wavWrites) {
+      mem[addr - base] = value;
+    }
+  } else if (bytes.length > 0) {
+    // WRITE lines found but none in the waveform memory range — nothing to
+    // import. Surface this so the user isn't left guessing.
+    return { error: `No WRITE lines to waveform memory (0x84-0xE7) found. Parsed ${bytes.length} register write(s) but all target IC config registers.` };
+  } else {
+    for (let i = 0; i < rawOnly.length && i < MAX_MEM; i++) mem[i] = rawOnly[i];
+  }
+
+  // Use detected ACCELERATION_EN for snippet decoding if present, so AMP
+  // bytes are interpreted in the mode they were authored in.
+  const accelForDecode = (detectedAccel !== null) ? detectedAccel : state.accelerationEn;
+
+  // Decode header
+  const nSnp = mem[0];
+  const nSeq = mem[1];
+  if (nSnp > 15 || nSeq > 16 || (2 + nSnp + nSeq) > MAX_MEM) {
+    return { error: `Invalid header: num_snippets=${nSnp}, num_sequences=${nSeq}` };
+  }
+  const snippetEnds = [];
+  const sequenceEnds = [];
+  let p = 2;
+  for (let i = 0; i < nSnp; i++) { snippetEnds.push(mem[p++]); }
+  for (let i = 0; i < nSeq; i++) { sequenceEnds.push(mem[p++]); }
+  const headerSize = 2 + nSnp + nSeq;
+
+  // Validate pointer monotonicity
+  let prev = headerSize - 1;
+  for (let i = 0; i < snippetEnds.length; i++) {
+    if (snippetEnds[i] < prev) return { error: `Snippet ${i+1} end pointer 0x${snippetEnds[i].toString(16)} not monotonic` };
+    prev = snippetEnds[i];
+  }
+  for (let i = 0; i < sequenceEnds.length; i++) {
+    if (sequenceEnds[i] < prev) return { error: `Sequence ${i} end pointer 0x${sequenceEnds[i].toString(16)} not monotonic` };
+    prev = sequenceEnds[i];
+  }
+
+  // Extract snippets
+  const snippets = [];
+  let cursor = headerSize;
+  for (let i = 0; i < nSnp; i++) {
+    const endByte = snippetEnds[i];
+    const pts = [];
+    for (let j = cursor; j <= endByte && j < MAX_MEM; j++) {
+      pts.push(byteToPwl(mem[j], accelForDecode));
+    }
+    snippets.push({ points: pts });
+    cursor = endByte + 1;
+  }
+
+  // Extract sequences
+  const sequences = [];
+  for (let i = 0; i < nSeq; i++) {
+    const endByte = sequenceEnds[i];
+    const raw = [];
+    for (let j = cursor; j <= endByte && j < MAX_MEM; j++) raw.push(mem[j]);
+    const frames = parseFrames(raw);
+    sequences.push({ frames });
+    cursor = endByte + 1;
+  }
+
+  return { nSnp, nSeq, snippets, sequences, base, detectedAccel, detectedFwtb, totalWrites: bytes.length, wavWrites: wavWrites.length };
+}
+
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+function validate(layout) {
+  const msgs = [];
+  const { totalUsed, overflow, snippetEnds, sequenceEnds } = layout;
+  if (state.snippets.length > 15) msgs.push({ level: 'err', text: `Too many snippets: ${state.snippets.length} (max 15, SNP_ID=0 is silence)` });
+  if (state.sequences.length > 16) msgs.push({ level: 'err', text: `Too many sequences: ${state.sequences.length} (max 16)` });
+  if (overflow > 0) {
+    msgs.push({ level: 'err', text: `Memory overflow by ${overflow} byte(s). Total ${totalUsed}/100.` });
+  } else if (totalUsed > 90) {
+    msgs.push({ level: 'warn', text: `Memory ${totalUsed}/100. Approaching capacity.` });
+  }
+  // Frames that address non-existent snippets
+  state.sequences.forEach((seq, si) => {
+    seq.frames.forEach((f, fi) => {
+      if (f.snpId > state.snippets.length) {
+        msgs.push({ level: 'warn', text: `Sequence ${si} frame ${fi} references SNP_ID=${f.snpId} (only ${state.snippets.length} defined; 0 is built-in silence)` });
+      }
+      if (f.freqCmd) {
+        const freqHz = f.freq * 2;
+        if (freqHz < 25) msgs.push({ level: 'warn', text: `Sequence ${si} frame ${fi} frequency ${freqHz}Hz below 25Hz (will be clamped)` });
+        if (freqHz > 1024) msgs.push({ level: 'warn', text: `Sequence ${si} frame ${fi} frequency ${freqHz}Hz > 1024Hz` });
+      }
+    });
+  });
+  // Base addr in valid range
+  if (state.baseAddr < 0x80 || state.baseAddr > 0xFF - MAX_MEM + 1) {
+    msgs.push({ level: 'warn', text: `Base address 0x${state.baseAddr.toString(16)} unusual (datasheet default 0x84)` });
+  }
+  if (state.snippets.length === 0 && state.sequences.length === 0) {
+    msgs.push({ level: 'ok', text: 'Memory empty. Add snippets and sequences to begin.' });
+  } else if (msgs.length === 0) {
+    msgs.push({ level: 'ok', text: `OK. ${totalUsed}/100 bytes. ${state.snippets.length} snippet(s), ${state.sequences.length} sequence(s).` });
+  }
+  return msgs;
+}
+
+// ===========================================================================
+// RENDERING
+// ===========================================================================
+
+function renderAll() {
+  renderSnippetTiles();
+  renderSequenceTiles();
+  renderSelectionEditor(); // also draws the big preview canvas at top of editor
+  const layout = layoutMemory();
+  renderMemMap(layout);
+  renderValidation(layout);
+  renderExports(layout);
+  updateMeters();
+}
+
+function renderSnippetTiles() {
+  const grid = document.getElementById('snp-tiles');
+  grid.innerHTML = '';
+  document.getElementById('snp-count').textContent = state.snippets.length;
+
+  state.snippets.forEach((s, i) => {
+    const tile = document.createElement('div');
+    tile.className = 'tile snp';
+    if (state.selection.type === 'snippet' && state.selection.index === i) tile.classList.add('active');
+
+    const nBytes = Math.max(1, s.points.length);
+    const totalTb = s.points.reduce((a, p) => a + (p.time + 1), 0);
+    const desc = s.points.map(p => `${p.rmp?'↗':'—'}${p.amp>=0?'+':''}${p.amp}`).join(' ');
+
+    tile.innerHTML = `
+      <div class="tile-head">
+        <span class="tile-title">SNP_${i+1}</span>
+        <span class="tile-meta">${nBytes}B · ${totalTb || 0}tb</span>
+      </div>
+      <canvas></canvas>
+      <div class="tile-preview">${escapeHtml(desc || '(empty)')}</div>
+    `;
+    tile.onclick = () => { select('snippet', i); };
+    grid.appendChild(tile);
+
+    // Draw after append
+    const cv = tile.querySelector('canvas');
+    requestAnimationFrame(() => drawSnippetPreview(cv, s, { compact: true }));
+  });
+
+  // "New snippet" tile
+  const addTile = document.createElement('div');
+  addTile.className = 'tile tile-new';
+  addTile.textContent = state.snippets.length === 0
+    ? '+ Add your first snippet — click here'
+    : '+ Add snippet';
+  addTile.onclick = addSnippet;
+  grid.appendChild(addTile);
+}
+
+function renderSequenceTiles() {
+  const grid = document.getElementById('seq-tiles');
+  grid.innerHTML = '';
+  document.getElementById('seq-count').textContent = state.sequences.length;
+
+  state.sequences.forEach((s, i) => {
+    const tile = document.createElement('div');
+    tile.className = 'tile seq';
+    if (state.selection.type === 'sequence' && state.selection.index === i) tile.classList.add('active');
+
+    const nBytes = s.frames.reduce((a, f) => a + frameBytes(f).length, 0) || 1;
+    const tb = currentTimebaseMs();
+    const desc = s.frames.map(f => {
+      let str = `S${f.snpId}×${f.snpIdLoop+1}`;
+      if (f.freqCmd) str += `@${f.freq*2}Hz`;
+      return str;
+    }).join(' → ');
+
+    tile.innerHTML = `
+      <div class="tile-head">
+        <span class="tile-title">SEQ_${i}</span>
+        <span class="tile-meta">${s.frames.length}fr · ${nBytes}B</span>
+      </div>
+      <canvas></canvas>
+      <div class="tile-preview">${escapeHtml(desc || '(empty)')}</div>
+    `;
+    tile.onclick = () => { select('sequence', i); };
+    grid.appendChild(tile);
+
+    const cv = tile.querySelector('canvas');
+    requestAnimationFrame(() => drawSequencePreview(cv, s, { compact: true }));
+  });
+
+  const addTile = document.createElement('div');
+  addTile.className = 'tile tile-new';
+  addTile.textContent = state.sequences.length === 0
+    ? '+ Add your first sequence — click here'
+    : '+ Add sequence';
+  addTile.onclick = addSequence;
+  grid.appendChild(addTile);
+}
+
+function currentTimebaseMs() {
+  return state.freqWaveformTimebase ? TIMEBASE_B : TIMEBASE_A;
+}
+
+function renderSelectionEditor() {
+  const host = document.getElementById('editor-body');
+  const title = document.getElementById('editor-title');
+  const label = document.getElementById('editor-label');
+  host.innerHTML = '';
+
+  if (state.selection.type === 'snippet' && state.snippets[state.selection.index]) {
+    title.textContent = 'Edit snippet';
+    label.textContent = `Snippet ${state.selection.index + 1}`;
+    host.appendChild(buildSnippetEditor(state.selection.index));
+  } else if (state.selection.type === 'sequence' && state.sequences[state.selection.index]) {
+    title.textContent = 'Edit sequence';
+    label.textContent = `Sequence ${state.selection.index}`;
+    host.appendChild(buildSequenceEditor(state.selection.index));
+  } else {
+    title.textContent = 'Editor';
+    label.textContent = '—';
+    const cv = document.createElement('canvas');
+    cv.className = 'preview';
+    cv.id = 'preview-canvas';
+    cv.setAttribute('height', '160');
+    host.appendChild(cv);
+    const help = document.createElement('p');
+    help.className = 'help';
+    help.style.marginTop = '8px';
+    help.textContent = 'Select a snippet or sequence from the left to start editing. The preview is approximate — actual LRA response depends on mechanical characteristics.';
+    host.appendChild(help);
+    requestAnimationFrame(() => {
+      const { ctx, w, h } = fitCanvas(cv);
+      ctx.clearRect(0, 0, w, h);
+      drawGrid(ctx, w, h, state.accelerationEn ? 'unipolar' : 'bipolar');
+      drawEmptyText(ctx, w, h, 'Select a snippet or sequence to preview');
+    });
+  }
+}
+
+// Trash-can SVG used as the delete button icon in editor rows.
+const TRASH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h10"/><path d="M6 5V3.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V5"/><path d="M4.5 5l.7 8.5a1 1 0 0 0 1 .9h3.6a1 1 0 0 0 1-.9L11.5 5"/><path d="M7 7.5v4"/><path d="M9 7.5v4"/></svg>`;
+
+// Enable HTML5 drag-and-drop reordering on table rows. The row is only
+// draggable once the user mouse-presses on the drag handle cell, so clicks
+// on inputs/selects inside the row behave normally.
+function makeReorderable(tbody, arr, onReorder) {
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  let srcIdx = -1;
+  const clearMarks = () => rows.forEach(r => r.classList.remove('drop-above', 'drop-below'));
+
+  rows.forEach((tr, idx) => {
+    const handle = tr.querySelector('.drag-handle');
+    if (!handle) return;
+
+    handle.addEventListener('mousedown', () => { tr.draggable = true; });
+    const disable = () => { tr.draggable = false; };
+    handle.addEventListener('mouseup', disable);
+    handle.addEventListener('mouseleave', disable);
+
+    tr.addEventListener('dragstart', (e) => {
+      srcIdx = idx;
+      tr.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', String(idx)); } catch(_) {}
+    });
+
+    tr.addEventListener('dragend', () => {
+      tr.classList.remove('dragging');
+      tr.draggable = false;
+      clearMarks();
+      srcIdx = -1;
+    });
+
+    tr.addEventListener('dragover', (e) => {
+      if (srcIdx < 0 || idx === srcIdx) { clearMarks(); return; }
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = tr.getBoundingClientRect();
+      const above = e.clientY < rect.top + rect.height / 2;
+      clearMarks();
+      tr.classList.add(above ? 'drop-above' : 'drop-below');
+    });
+
+    tr.addEventListener('drop', (e) => {
+      if (srcIdx < 0 || idx === srcIdx) return;
+      e.preventDefault();
+      const rect = tr.getBoundingClientRect();
+      const above = e.clientY < rect.top + rect.height / 2;
+      let targetIdx = above ? idx : idx + 1;
+      const item = arr.splice(srcIdx, 1)[0];
+      if (targetIdx > srcIdx) targetIdx--;
+      arr.splice(targetIdx, 0, item);
+      clearMarks();
+      onReorder();
+    });
+  });
+}
+
+function buildSnippetEditor(idx) {
+  const snp = state.snippets[idx];
+  const box = document.createElement('div');
+  const accel = state.accelerationEn;
+  const ampHint = accel ? '0–15 (unsigned)' : '−7…+7 (signed)';
+
+  // Preview canvas at the top (large)
+  const cv = document.createElement('canvas');
+  cv.className = 'preview';
+  cv.id = 'preview-canvas';
+  cv.setAttribute('height', '160');
+  box.appendChild(cv);
+
+  // Toolbar row under preview
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = 'display:flex; align-items:center; gap:8px; margin: 10px 0 6px;';
+  toolbar.innerHTML = `
+    <span class="meta" style="color: var(--snp);">Snippet ${idx+1}</span>
+    <span class="meta">${snp.points.length} PWL point(s) · ${snp.points.length} byte(s)</span>
+    <div class="spacer" style="flex:1"></div>
+    <div class="btn-row">
+      <button class="small" data-act="add-point">+ Add point</button>
+      <button class="small danger" data-act="del-snp">Delete snippet</button>
+    </div>
+  `;
+  box.appendChild(toolbar);
+
+  const body = document.createElement('div');
+  const table = document.createElement('table');
+  table.className = 'editor';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>RMP</th>
+        <th>TIME (tb)</th>
+        <th>AMP (${ampHint})</th>
+        <th>byte</th>
+        <th></th>
+      </tr>
+    </thead>
+  `;
+  const tbody = document.createElement('tbody');
+  snp.points.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    const byte = pwlToByte(p, accel);
+    tr.innerHTML = `
+      <td class="num drag-handle" title="Drag to reorder">${i+1}</td>
+      <td>
+        <select data-i="${i}" data-f="rmp">
+          <option value="0" ${p.rmp?'':'selected'}>0 (step)</option>
+          <option value="1" ${p.rmp?'selected':''}>1 (ramp)</option>
+        </select>
+      </td>
+      <td>
+        <select data-i="${i}" data-f="time">
+          ${[0,1,2,3,4,5,6,7].map(v => `<option value="${v}" ${v===p.time?'selected':''}>${v} (${v+1} tb)</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="number" value="${p.amp}" min="${accel?0:-7}" max="${accel?15:7}" step="1" data-i="${i}" data-f="amp"></td>
+      <td><code style="color: var(--muted);">0x${byte.toString(16).toUpperCase().padStart(2,'0')}</code></td>
+      <td class="actions">
+        <button class="small danger icon-btn" data-act="del-point" data-i="${i}" title="Delete">${TRASH_SVG}</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  body.appendChild(table);
+
+  makeReorderable(tbody, snp.points, () => renderAll());
+
+  const help = document.createElement('p');
+  help.className = 'help';
+  help.innerHTML = `
+    PWL byte = <code>RMP[7] | TIME[6:4] | AMP[3:0]</code>. TIME value <i>n</i> = <i>n+1</i> timebases.
+    ${accel ? 'AMP is unsigned: 0 = silence, 15 = 100%.' : 'AMP is 2’s complement: ±7 = ±100%, −8 clamped to −7.'}
+    Snippets start from P0 = 0 amplitude at the beginning of a non-looped sequence.
+    Drag the # handle to reorder points.
+  `;
+  body.appendChild(help);
+
+  box.appendChild(body);
+
+  // Wire events
+  box.addEventListener('change', (e) => {
+    const i = parseInt(e.target.dataset.i);
+    const f = e.target.dataset.f;
+    if (isNaN(i) || !f) return;
+    let v = e.target.value;
+    if (f === 'rmp' || f === 'time') v = parseInt(v, 10);
+    if (f === 'amp') v = clampAmp(parseInt(v, 10), accel);
+    snp.points[i][f] = v;
+    renderAll();
+  });
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    if (act === 'add-point') {
+      snp.points.push({ rmp: 1, time: 2, amp: accel ? 15 : 7 });
+    } else if (act === 'del-snp') {
+      if (!confirm(`Delete snippet ${idx+1}?`)) return;
+      state.snippets.splice(idx, 1);
+      // Re-number SNP_ID references in frames
+      state.sequences.forEach(sq => sq.frames.forEach(fr => {
+        if (fr.snpId > idx + 1) fr.snpId--;
+        else if (fr.snpId === idx + 1) fr.snpId = 0; // fallback to silence
+      }));
+      state.selection = { type: null, index: -1 };
+    } else if (act === 'del-point') {
+      const i = parseInt(btn.dataset.i);
+      snp.points.splice(i, 1);
+    }
+    renderAll();
+  });
+
+  // Draw preview after mount
+  requestAnimationFrame(() => drawSnippetPreview(cv, snp));
+
+  return box;
+}
+
+function buildSequenceEditor(idx) {
+  const seq = state.sequences[idx];
+  const box = document.createElement('div');
+
+  const nBytes = seq.frames.reduce((a, f) => a + frameBytes(f).length, 0);
+
+  // Preview canvas at the top (large)
+  const cv = document.createElement('canvas');
+  cv.className = 'preview';
+  cv.id = 'preview-canvas';
+  cv.setAttribute('height', '160');
+  box.appendChild(cv);
+
+  // Toolbar row under preview
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = 'display:flex; align-items:center; gap:8px; margin: 10px 0 6px;';
+  toolbar.innerHTML = `
+    <span class="meta" style="color: var(--seq);">Sequence ${idx}</span>
+    <span class="meta">${seq.frames.length} frame(s) · ${nBytes} byte(s)</span>
+    <div class="spacer" style="flex:1"></div>
+    <div class="btn-row">
+      <button class="small" data-act="add-frame">+ Add frame</button>
+      <button class="small danger" data-act="del-seq">Delete sequence</button>
+    </div>
+  `;
+  box.appendChild(toolbar);
+
+  const body = document.createElement('div');
+  const tb = currentTimebaseMs();
+
+  const table = document.createElement('table');
+  table.className = 'editor';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>SNP_ID</th>
+        <th>GAIN</th>
+        <th>TIMEBASE</th>
+        <th>LOOP</th>
+        <th>FREQ</th>
+        <th>bytes</th>
+        <th></th>
+      </tr>
+    </thead>
+  `;
+  const tbody = document.createElement('tbody');
+  const maxSnpId = Math.max(15, state.snippets.length);
+  seq.frames.forEach((f, i) => {
+    const bs = frameBytes(f);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="num drag-handle" title="Drag to reorder">${i}</td>
+      <td>
+        <select data-i="${i}" data-f="snpId">
+          <option value="0" ${f.snpId===0?'selected':''}>0 · silence</option>
+          ${Array.from({length: maxSnpId}, (_, k) => `<option value="${k+1}" ${f.snpId===k+1?'selected':''}>${k+1}${k+1 <= state.snippets.length ? '' : ' (undef)'}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <select data-i="${i}" data-f="gain">
+          ${GAIN_DB.map((v, k) => `<option value="${k}" ${f.gain===k?'selected':''}>${v===0?'0dB':v+'dB'}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <select data-i="${i}" data-f="timebase">
+          ${tb.map((ms, k) => `<option value="${k}" ${f.timebase===k?'selected':''}>${ms} ms</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <select data-i="${i}" data-f="snpIdLoop">
+          ${Array.from({length: 16}, (_, k) => `<option value="${k}" ${f.snpIdLoop===k?'selected':''}>×${k+1}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <div style="display:inline-flex; align-items:center; gap:4px; white-space:nowrap;">
+          <input type="checkbox" data-i="${i}" data-f="freqCmd" ${f.freqCmd?'checked':''} title="Emit frequency command byte 3" style="margin:0;">
+          <input type="number" data-i="${i}" data-f="freq" value="${f.freq}" min="0" max="511" step="1" ${f.freqCmd?'':'disabled'} style="width: 56px;" title="FREQ[8:0] — drive Hz = value × 2">
+          <span style="color: var(--muted); font-size: 10px; min-width: 44px; display: inline-block; text-align: left;">${f.freqCmd ? (f.freq*2)+' Hz' : '—'}</span>
+        </div>
+      </td>
+      <td><code style="color: var(--muted);">${bs.map(b => '0x' + b.toString(16).toUpperCase().padStart(2,'0')).join(' ')}</code></td>
+      <td class="actions">
+        <button class="small danger icon-btn" data-act="del-frame" data-i="${i}" title="Delete">${TRASH_SVG}</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  body.appendChild(table);
+
+  makeReorderable(tbody, seq.frames, () => renderAll());
+
+  const help = document.createElement('p');
+  help.className = 'help';
+  help.innerHTML = `
+    Frame byte 1 (mandatory): <code>CMD_TYPE=0 | GAIN[1:0] | TIMEBASE[1:0] | SNP_ID_L[2:0]</code>.
+    Byte 2 (optional, if loop>0 or SNP_ID>7 or FREQ_CMD): <code>CMD_TYPE=1 | SNP_ID_LOOP[3:0] | FREQ_CMD | FREQ[8] | SNP_ID_H</code>.
+    Byte 3 (if FREQ_CMD=1): <code>FREQ[7:0]</code>. FREQ (Hz) = value × 2, 25–1024 Hz range.
+    Drag the # handle to reorder frames.
+  `;
+  body.appendChild(help);
+
+  box.appendChild(body);
+
+  box.addEventListener('change', (e) => {
+    const i = parseInt(e.target.dataset.i);
+    const f = e.target.dataset.f;
+    if (isNaN(i) || !f) return;
+    const fr = seq.frames[i];
+    if (e.target.type === 'checkbox') {
+      fr[f] = e.target.checked;
+    } else {
+      let v = e.target.value;
+      if (f === 'freq') v = Math.max(0, Math.min(511, parseInt(v, 10) || 0));
+      else v = parseInt(v, 10);
+      fr[f] = v;
+    }
+    renderAll();
+  });
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    if (act === 'add-frame') {
+      seq.frames.push({ snpId: 1, gain: 0, timebase: 0, snpIdLoop: 0, freqCmd: false, freq: 0 });
+    } else if (act === 'del-seq') {
+      if (!confirm(`Delete sequence ${idx}?`)) return;
+      state.sequences.splice(idx, 1);
+      state.selection = { type: null, index: -1 };
+    } else if (act === 'del-frame') {
+      const i = parseInt(btn.dataset.i);
+      seq.frames.splice(i, 1);
+    }
+    renderAll();
+  });
+
+  requestAnimationFrame(() => drawSequencePreview(cv, seq));
+  return box;
+}
+
+// ---------------------------------------------------------------------------
+// Memory map rendering
+// ---------------------------------------------------------------------------
+function renderMemMap(layout) {
+  const map = document.getElementById('mem-map');
+  map.innerHTML = '';
+  const { regions, totalUsed } = layout;
+  const kindOf = new Array(MAX_MEM).fill('empty');
+  const labelOf = new Array(MAX_MEM).fill('unused');
+  regions.forEach(r => {
+    for (let i = r.from; i <= r.to && i < MAX_MEM; i++) {
+      kindOf[i] = r.kind;
+      labelOf[i] = r.label;
+    }
+  });
+  // mark overflow cells beyond 100 as nothing; addresses over MAX_MEM can't render
+  for (let i = 0; i < MAX_MEM; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'mem-cell ' + kindOf[i];
+    const addr = state.baseAddr + i;
+    cell.title = `byte ${i} · reg 0x${addr.toString(16).toUpperCase().padStart(2,'0')} · ${labelOf[i]}`;
+    if (i === 0 || i === MAX_MEM - 1 || (i % 20 === 0)) {
+      cell.textContent = '0x' + addr.toString(16).toUpperCase().padStart(2,'0');
+      cell.style.fontSize = '8px';
+    }
+    map.appendChild(cell);
+  }
+  document.getElementById('mem-meta').textContent = `${totalUsed} / ${MAX_MEM} bytes`;
+  const fill = document.getElementById('mem-fill');
+  const pct = Math.min(100, Math.round((totalUsed / MAX_MEM) * 100));
+  fill.style.width = pct + '%';
+  fill.classList.toggle('over', totalUsed > MAX_MEM);
+  document.getElementById('mem-count').textContent = `${totalUsed} / ${MAX_MEM}`;
+  // Also update the header-level memory indicator (always visible)
+  const hfill = document.getElementById('header-mem-fill');
+  if (hfill) {
+    hfill.style.width = pct + '%';
+    hfill.classList.toggle('over', totalUsed > MAX_MEM);
+  }
+  const hlbl = document.getElementById('header-mem-label');
+  if (hlbl) hlbl.textContent = `${totalUsed} / ${MAX_MEM} B`;
+}
+
+function renderValidation(layout) {
+  const v = document.getElementById('validation');
+  const msgs = validate(layout);
+  v.innerHTML = msgs.map(m => `<div class="${m.level}">${m.level === 'err' ? '✗' : m.level === 'warn' ? '⚠' : '✓'} ${escapeHtml(m.text)}</div>`).join('');
+}
+
+function renderExports(layout) {
+  document.getElementById('export-hex').value = encodeHexWrites(layout.mem, layout.totalUsed, state.baseAddr);
+  document.getElementById('export-c').value = encodeC(layout.mem, layout.totalUsed, state.baseAddr);
+  document.getElementById('export-rust').value = encodeRust(layout.mem, layout.totalUsed, state.baseAddr);
+  document.getElementById('export-raw').value = encodeRawBytes(layout.mem, layout.totalUsed);
+}
+
+function updateMeters() {
+  // nothing extra for now
+}
+
+// ---------------------------------------------------------------------------
+// Preview canvases
+// ---------------------------------------------------------------------------
+function fitCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  // Read CSS-resolved dimensions BEFORE we touch cv.width/cv.height — once we
+  // set the internal pixel size, cv.clientHeight tracks CSS height (set below).
+  const w = cv.clientWidth || 300;
+  let h = cv.clientHeight;
+  if (!h) {
+    // Fall back to attribute height for freshly created canvases without CSS.
+    h = parseInt(cv.getAttribute('height'), 10) || 100;
+  }
+  cv.style.width = w + 'px';
+  cv.style.height = h + 'px';
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+  return { ctx, w, h };
+}
+
+// Chart area layout for non-compact previews (editor), returns the inset box.
+function chartBox(w, h, compact) {
+  if (compact) return { x0: 4, y0: 4, x1: w - 4, y1: h - 4 };
+  return {
+    x0: 38,                  // leave room for Y labels
+    y0: 12,                  // leave room for title/top label
+    x1: w - 8,
+    y1: h - 22,              // leave room for X axis labels
+  };
+}
+
+// Y mapper: norm in [-1, 1] or [0, 1] → pixel Y inside chart box
+function yMapper(mode, box) {
+  if (mode === 'unipolar') {
+    const yZero = box.y1;
+    const yOne = box.y0;
+    return (norm) => yZero + norm * (yOne - yZero); // norm 0..1
+  } else {
+    const yMid = (box.y0 + box.y1) / 2;
+    const half = (box.y1 - box.y0) / 2;
+    return (norm) => yMid - norm * half; // norm -1..1
+  }
+}
+
+// Draw X-axis ticks + labels and Y-axis ticks + labels.
+// yTicks: array of { value:string, norm:number }
+// xTicks: array of { value:string, pos:number } where pos is in [0,1] across chart width
+// xAxisLabel, yAxisLabel: axis titles
+function drawAxes(ctx, w, h, mode, box, yTicks, xTicks, xAxisLabel, yAxisLabel) {
+  ctx.save();
+  ctx.strokeStyle = '#3a4554';
+  ctx.fillStyle = '#8a95a8';
+  ctx.lineWidth = 1;
+  ctx.font = '10px var(--mono), monospace';
+  const yMap = yMapper(mode, box);
+
+  // Y axis line
+  ctx.beginPath();
+  ctx.moveTo(box.x0, box.y0);
+  ctx.lineTo(box.x0, box.y1);
+  ctx.stroke();
+
+  // Y ticks + labels
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (const t of yTicks) {
+    const y = yMap(t.norm);
+    ctx.beginPath();
+    ctx.moveTo(box.x0 - 3, y);
+    ctx.lineTo(box.x0, y);
+    ctx.stroke();
+    // Light horizontal grid line
+    ctx.strokeStyle = 'rgba(45, 54, 67, 0.35)';
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    ctx.moveTo(box.x0, y);
+    ctx.lineTo(box.x1, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = '#3a4554';
+    ctx.fillText(t.value, box.x0 - 5, y);
+  }
+
+  // X axis line
+  const xZeroY = mode === 'unipolar' ? box.y1 : yMap(0);
+  ctx.beginPath();
+  ctx.moveTo(box.x0, xZeroY);
+  ctx.lineTo(box.x1, xZeroY);
+  ctx.stroke();
+
+  // X axis baseline (for labels at bottom)
+  if (mode === 'bipolar') {
+    ctx.beginPath();
+    ctx.moveTo(box.x0, box.y1);
+    ctx.lineTo(box.x1, box.y1);
+    ctx.stroke();
+  }
+
+  // X ticks + labels (placed along bottom of chart box regardless of mode)
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (const t of xTicks) {
+    const x = box.x0 + t.pos * (box.x1 - box.x0);
+    ctx.beginPath();
+    ctx.moveTo(x, box.y1);
+    ctx.lineTo(x, box.y1 + 3);
+    ctx.stroke();
+    ctx.fillText(t.value, x, box.y1 + 5);
+  }
+
+  // Axis labels
+  if (xAxisLabel) {
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#5a6678';
+    ctx.fillText(xAxisLabel, box.x1, h - 2);
+  }
+  if (yAxisLabel) {
+    ctx.save();
+    ctx.translate(10, (box.y0 + box.y1) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#5a6678';
+    ctx.fillText(yAxisLabel, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawSnippetPreview(cv, snp, opts) {
+  opts = opts || {};
+  const compact = !!opts.compact;
+  const { ctx, w, h } = fitCanvas(cv);
+  ctx.clearRect(0, 0, w, h);
+  const mode = state.accelerationEn ? 'unipolar' : 'bipolar';
+
+  if (compact) {
+    drawGrid(ctx, w, h, mode, false, true);
+  }
+  if (!snp || snp.points.length === 0) {
+    if (!compact) drawGrid(ctx, w, h, mode, false, false);
+    drawEmptyText(ctx, w, h, compact ? '∅' : 'Empty snippet');
+    return;
+  }
+
+  const totalTb = snp.points.reduce((a, p) => a + (p.time + 1), 0);
+  const accel = state.accelerationEn;
+  const box = chartBox(w, h, compact);
+
+  // Build axis ticks for non-compact mode
+  if (!compact) {
+    const yTicks = accel
+      ? [
+          { value: '15', norm: 1 },
+          { value: '10', norm: 10/15 },
+          { value: '5',  norm: 5/15 },
+          { value: '0',  norm: 0 },
+        ]
+      : [
+          { value: '+7', norm: 1 },
+          { value: '0',  norm: 0 },
+          { value: '−7', norm: -1 },
+        ];
+    // X ticks at every timebase, capped at ~10 visible
+    const step = Math.max(1, Math.ceil(totalTb / 10));
+    const xTicks = [];
+    for (let i = 0; i <= totalTb; i += step) {
+      xTicks.push({ value: String(i), pos: i / Math.max(1, totalTb) });
+    }
+    if (xTicks.length === 0 || xTicks[xTicks.length - 1].pos < 1) {
+      xTicks.push({ value: String(totalTb), pos: 1 });
+    }
+    drawAxes(ctx, w, h, mode, box, yTicks, xTicks, 'unit time (tb)', 'amplitude');
+  }
+
+  // Plot the PWL envelope inside the chart box
+  const x0 = compact ? 4 : box.x0;
+  const x1 = compact ? w - 4 : box.x1;
+  const tbWidth = (x1 - x0) / Math.max(1, totalTb);
+  const yMap = compact
+    ? (() => {
+        const yCenter = accel ? h - 6 : h / 2;
+        const yScale = accel ? (h - 12) : (h / 2 - 6);
+        return (norm) => yCenter - norm * yScale;
+      })()
+    : yMapper(mode, box);
+  const yZero = yMap(0);
+
+  ctx.strokeStyle = '#7e57c2';
+  ctx.lineWidth = compact ? 1.5 : 2;
+  ctx.beginPath();
+  let x = x0;
+  let prevAmpNorm = 0;
+  ctx.moveTo(x, yMap(prevAmpNorm));
+  for (const p of snp.points) {
+    const a = ampToNorm(p.amp, accel);
+    const dur = (p.time + 1) * tbWidth;
+    if (p.rmp) {
+      ctx.lineTo(x + dur, yMap(a));
+    } else {
+      ctx.lineTo(x, yMap(a));
+      ctx.lineTo(x + dur, yMap(a));
+    }
+    x += dur;
+    prevAmpNorm = a;
+  }
+  ctx.stroke();
+
+  // Fill area under/over
+  ctx.lineTo(x, yZero);
+  ctx.lineTo(x0, yZero);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(126, 87, 194, 0.18)';
+  ctx.fill();
+
+  if (!compact) {
+    ctx.fillStyle = '#8a95a8';
+    ctx.font = '11px var(--mono), monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(`${totalTb} timebases · ${snp.points.length} PWL points`, box.x1, box.y0 - 2);
+    ctx.textAlign = 'left';
+  }
+}
+
+function drawSequencePreview(cv, seq, opts) {
+  opts = opts || {};
+  const compact = !!opts.compact;
+  const { ctx, w, h } = fitCanvas(cv);
+  ctx.clearRect(0, 0, w, h);
+  const mode = state.accelerationEn ? 'unipolar' : 'bipolar';
+  const accel = state.accelerationEn;
+
+  if (compact) drawGrid(ctx, w, h, mode, false, true);
+  if (!seq || seq.frames.length === 0) {
+    if (!compact) drawGrid(ctx, w, h, mode, false, false);
+    drawEmptyText(ctx, w, h, compact ? '∅' : 'Empty sequence');
+    return;
+  }
+
+  const tb = currentTimebaseMs();
+
+  // Build playback plan
+  let totalMs = 0;
+  const plan = []; // {fi, snpId, loopIter, startMs, durMs, gainMul, tbMs, freq, snpTbTotal}
+  for (let fi = 0; fi < seq.frames.length; fi++) {
+    const f = seq.frames[fi];
+    const iters = f.snpIdLoop + 1;
+    const tbMs = tb[f.timebase];
+    let snpTbTotal = 2;
+    if (f.snpId === 0) {
+      snpTbTotal = 2;
+    } else if (state.snippets[f.snpId - 1]) {
+      const s = state.snippets[f.snpId - 1];
+      snpTbTotal = s.points.reduce((a, p) => a + (p.time + 1), 0) || 1;
+    }
+    for (let it = 0; it < iters; it++) {
+      const dur = snpTbTotal * tbMs;
+      plan.push({ fi, snpId: f.snpId, it, startMs: totalMs, durMs: dur, gainMul: Math.pow(10, GAIN_DB[f.gain] / 20), tbMs, freq: f.freqCmd ? f.freq * 2 : null, snpTbTotal });
+      totalMs += dur;
+    }
+  }
+  if (totalMs === 0) {
+    if (!compact) drawGrid(ctx, w, h, mode, false, false);
+    drawEmptyText(ctx, w, h, 'Zero-duration sequence');
+    return;
+  }
+
+  const box = chartBox(w, h, compact);
+  const px = compact
+    ? (ms) => 4 + (ms / totalMs) * (w - 8)
+    : (ms) => box.x0 + (ms / totalMs) * (box.x1 - box.x0);
+
+  // Frame band/line/label colors: green by default, blue when FREQ_CMD is set.
+  const SEQ_GREEN_RGB  = '38,166,154';
+  const SEQ_GREEN_HEX  = '#26a69a';
+  const SEQ_BLUE_RGB   = '79,195,247';
+  const SEQ_BLUE_HEX   = '#4fc3f7';
+
+  // Frame bands (behind axes)
+  for (let fi = 0; fi < seq.frames.length; fi++) {
+    const f = seq.frames[fi];
+    const segs = plan.filter(p => p.fi === fi);
+    if (segs.length === 0) continue;
+    const start = segs[0].startMs;
+    const end = segs[segs.length - 1].startMs + segs[segs.length - 1].durMs;
+    const bandTop = compact ? 0 : box.y0;
+    const bandBottom = compact ? h : box.y1;
+    const rgb = f.freqCmd ? SEQ_BLUE_RGB : SEQ_GREEN_RGB;
+    const hex = f.freqCmd ? SEQ_BLUE_HEX : SEQ_GREEN_HEX;
+    ctx.fillStyle = (fi % 2 === 0) ? `rgba(${rgb},0.05)` : `rgba(${rgb},0.1)`;
+    ctx.fillRect(px(start), bandTop, px(end) - px(start), bandBottom - bandTop);
+    ctx.strokeStyle = `rgba(${rgb},0.3)`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px(end), bandTop); ctx.lineTo(px(end), bandBottom);
+    ctx.stroke();
+
+    if (!compact) {
+      ctx.fillStyle = hex;
+      ctx.font = '10px var(--mono), monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      const gd = GAIN_DB[f.gain];
+      let lbl = `F${fi}: S${f.snpId}×${f.snpIdLoop+1}`;
+      if (gd !== 0) lbl += ` ${gd}dB`;
+      if (f.freqCmd) lbl += ` ${f.freq*2}Hz`;
+      ctx.fillText(lbl, px(start) + 3, box.y0 - 2);
+    }
+  }
+
+  // Axes (non-compact only)
+  if (!compact) {
+    const yTicks = accel
+      ? [
+          { value: '15', norm: 1 },
+          { value: '10', norm: 10/15 },
+          { value: '5',  norm: 5/15 },
+          { value: '0',  norm: 0 },
+        ]
+      : [
+          { value: '+7', norm: 1 },
+          { value: '0',  norm: 0 },
+          { value: '−7', norm: -1 },
+        ];
+    // X ticks: up to ~6 across the sequence duration
+    const niceStep = niceMsStep(totalMs, 6);
+    const xTicks = [];
+    for (let t = 0; t <= totalMs + 1e-9; t += niceStep) {
+      xTicks.push({ value: formatMs(t), pos: t / totalMs });
+    }
+    if (xTicks[xTicks.length - 1].pos < 1) {
+      xTicks.push({ value: formatMs(totalMs), pos: 1 });
+    }
+    drawAxes(ctx, w, h, mode, box, yTicks, xTicks, 'time (ms)', 'amplitude');
+  } else {
+    drawGrid(ctx, w, h, mode, true, true);
+  }
+
+  // Envelope
+  const yMap = compact
+    ? (() => {
+        const yCenter = accel ? h - 6 : h / 2;
+        const yScale = accel ? (h - 12) : (h / 2 - 6);
+        return (norm) => yCenter - norm * yScale;
+      })()
+    : yMapper(mode, box);
+
+  // Build a flat list of polyline vertices with their owning frame index,
+  // then stroke frame-by-frame so the color can change with FREQ_CMD.
+  const verts = []; // { x, y, fi }
+  let prevAmpNorm = 0;
+  plan.forEach((seg, segIdx) => {
+    const snp = seg.snpId === 0 ? null : state.snippets[seg.snpId - 1];
+    const ampStart = (segIdx === 0) ? 0 : prevAmpNorm;
+    verts.push({ x: px(seg.startMs), y: yMap(ampStart * seg.gainMul), fi: seg.fi });
+    if (!snp || snp.points.length === 0) {
+      // Silence / empty snippet: step immediately to 0, then hold.
+      verts.push({ x: px(seg.startMs), y: yMap(0), fi: seg.fi });
+      verts.push({ x: px(seg.startMs + seg.durMs), y: yMap(0), fi: seg.fi });
+      prevAmpNorm = 0;
+      return;
+    }
+    let segTbElapsed = 0;
+    let ampHere = (seg.it === 0 && segIdx === 0) ? 0 : prevAmpNorm;
+    for (const pt of snp.points) {
+      const a = ampToNorm(pt.amp, accel);
+      const ptDur = (pt.time + 1) * seg.tbMs;
+      segTbElapsed += ptDur;
+      const x2 = px(seg.startMs + segTbElapsed);
+      if (pt.rmp) {
+        verts.push({ x: x2, y: yMap(a * seg.gainMul), fi: seg.fi });
+      } else {
+        verts.push({ x: px(seg.startMs + segTbElapsed - ptDur), y: yMap(a * seg.gainMul), fi: seg.fi });
+        verts.push({ x: x2, y: yMap(a * seg.gainMul), fi: seg.fi });
+      }
+      ampHere = a;
+    }
+    prevAmpNorm = ampHere;
+  });
+
+  // Stroke each frame's polyline with its own color. Include the boundary
+  // vertex from the previous frame as the new path's moveTo so gain/snippet
+  // transitions are drawn in the upcoming frame's color (no visible gap).
+  ctx.lineWidth = 2;
+  let runStart = 0;
+  for (let i = 1; i <= verts.length; i++) {
+    const atEnd = (i === verts.length);
+    if (atEnd || verts[i].fi !== verts[runStart].fi) {
+      const frm = seq.frames[verts[runStart].fi];
+      ctx.strokeStyle = frm && frm.freqCmd ? SEQ_BLUE_HEX : SEQ_GREEN_HEX;
+      ctx.beginPath();
+      ctx.moveTo(verts[runStart].x, verts[runStart].y);
+      for (let j = runStart + 1; j < i; j++) ctx.lineTo(verts[j].x, verts[j].y);
+      // Bridge to next frame's first vertex so there's no color gap.
+      if (!atEnd) ctx.lineTo(verts[i].x, verts[i].y);
+      ctx.stroke();
+      runStart = i;
+    }
+  }
+
+  if (!compact) {
+    ctx.fillStyle = '#8a95a8';
+    ctx.font = '10px var(--mono), monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(`${totalMs.toFixed(2)} ms total · ${seq.frames.length} frame(s)`, box.x1, box.y0 - 2);
+    ctx.textAlign = 'left';
+  }
+}
+
+// Nice step for ~N ms ticks across a duration.
+function niceMsStep(total, targetTicks) {
+  const raw = total / Math.max(1, targetTicks);
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const normalized = raw / pow;
+  let nice;
+  if (normalized < 1.5) nice = 1;
+  else if (normalized < 3) nice = 2;
+  else if (normalized < 7) nice = 5;
+  else nice = 10;
+  return nice * pow;
+}
+
+function formatMs(ms) {
+  if (ms === 0) return '0';
+  if (ms < 1) return ms.toFixed(2);
+  if (ms < 10) return ms.toFixed(1);
+  return Math.round(ms).toString();
+}
+
+function drawGrid(ctx, w, h, mode, lightOnly, compact) {
+  ctx.strokeStyle = lightOnly ? 'rgba(45, 54, 67, 0.5)' : '#2d3643';
+  ctx.lineWidth = 1;
+  // zero baseline
+  const yc = mode === 'unipolar' ? h - (compact ? 6 : 20) : h / 2;
+  ctx.beginPath();
+  ctx.moveTo(4, yc); ctx.lineTo(w - 4, yc);
+  ctx.stroke();
+  // +100% line
+  ctx.strokeStyle = 'rgba(45, 54, 67, 0.35)';
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath();
+  if (mode === 'unipolar') {
+    const topY = compact ? 4 : 16;
+    ctx.moveTo(4, topY); ctx.lineTo(w - 4, topY);
+  } else {
+    const topY = compact ? 4 : 14;
+    const botY = h - (compact ? 4 : 14);
+    ctx.moveTo(4, topY); ctx.lineTo(w - 4, topY);
+    ctx.moveTo(4, botY); ctx.lineTo(w - 4, botY);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  if (compact) return;
+  // Labels
+  ctx.fillStyle = '#5a6678';
+  ctx.font = '10px var(--mono), monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(mode === 'unipolar' ? '+100%' : '+100%', 4, 12);
+  ctx.fillText('0', 4, yc - 2);
+  if (mode === 'bipolar') ctx.fillText('−100%', 4, h - 6);
+}
+
+function drawEmptyText(ctx, w, h, text) {
+  ctx.fillStyle = '#5a6678';
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, w / 2, h / 2);
+  ctx.textAlign = 'left';
+}
+
+function renderPreview() {
+  // The preview canvas now lives inside the editor panel (id=preview-canvas,
+  // created by renderSelectionEditor / buildSnippetEditor / buildSequenceEditor).
+  // The draw is already triggered by those builders; this function only needs
+  // to handle resize-driven redraws.
+  const cv = document.getElementById('preview-canvas');
+  if (!cv) return;
+  if (state.selection.type === 'snippet' && state.snippets[state.selection.index]) {
+    requestAnimationFrame(() => drawSnippetPreview(cv, state.snippets[state.selection.index]));
+  } else if (state.selection.type === 'sequence' && state.sequences[state.selection.index]) {
+    requestAnimationFrame(() => drawSequencePreview(cv, state.sequences[state.selection.index]));
+  } else {
+    requestAnimationFrame(() => {
+      const { ctx, w, h } = fitCanvas(cv);
+      ctx.clearRect(0, 0, w, h);
+      drawGrid(ctx, w, h, state.accelerationEn ? 'unipolar' : 'bipolar');
+      drawEmptyText(ctx, w, h, 'Select a snippet or sequence to preview');
+    });
+  }
+}
+
+// ===========================================================================
+// ACTIONS
+// ===========================================================================
+
+function select(type, index) {
+  state.selection = { type, index };
+  renderAll();
+}
+
+function addSnippet() {
+  if (state.snippets.length >= 15) { toast('Max 15 custom snippets', 'err'); return; }
+  const accel = state.accelerationEn;
+  state.snippets.push({
+    points: [
+      { rmp: 1, time: 1, amp: accel ? 15 : 7 },
+      { rmp: 0, time: 3, amp: 0 }
+    ]
+  });
+  state.selection = { type: 'snippet', index: state.snippets.length - 1 };
+  renderAll();
+}
+
+function addSequence() {
+  if (state.sequences.length >= 16) { toast('Max 16 sequences', 'err'); return; }
+  state.sequences.push({
+    frames: [
+      { snpId: state.snippets.length >= 1 ? 1 : 0, gain: 0, timebase: 0, snpIdLoop: 0, freqCmd: false, freq: 0 }
+    ]
+  });
+  state.selection = { type: 'sequence', index: state.sequences.length - 1 };
+  renderAll();
+}
+
+function clearAll() {
+  if (!confirm('Clear all snippets and sequences?')) return;
+  state.snippets = [];
+  state.sequences = [];
+  state.selection = { type: null, index: -1 };
+  renderAll();
+}
+
+// ===========================================================================
+// EXAMPLE
+// ===========================================================================
+const EXAMPLE_HEX = `WRITE DA728x 0x84 0x06
+WRITE DA728x 0x85 0x0C
+WRITE DA728x 0x86 0x14
+WRITE DA728x 0x87 0x15
+WRITE DA728x 0x88 0x16
+WRITE DA728x 0x89 0x17
+WRITE DA728x 0x8A 0x18
+WRITE DA728x 0x8B 0x19
+WRITE DA728x 0x8C 0x20
+WRITE DA728x 0x8D 0x26
+WRITE DA728x 0x8E 0x2E
+WRITE DA728x 0x8F 0x32
+WRITE DA728x 0x90 0x37
+WRITE DA728x 0x91 0x42
+WRITE DA728x 0x92 0x45
+WRITE DA728x 0x93 0x4B
+WRITE DA728x 0x94 0x4E
+WRITE DA728x 0x95 0x50
+WRITE DA728x 0x96 0x54
+WRITE DA728x 0x97 0x5F
+WRITE DA728x 0x98 0x47
+WRITE DA728x 0x99 0x49
+WRITE DA728x 0x9A 0x39
+WRITE DA728x 0x9B 0xF7
+WRITE DA728x 0x9C 0x69
+WRITE DA728x 0x9D 0xF0
+WRITE DA728x 0x9E 0x01
+WRITE DA728x 0x9F 0x8C
+WRITE DA728x 0xA0 0x77
+WRITE DA728x 0xA1 0x02
+WRITE DA728x 0xA2 0x10
+WRITE DA728x 0xA3 0x84
+WRITE DA728x 0xA4 0x77
+WRITE DA728x 0xA5 0x09
+WRITE DA728x 0xA6 0x84
+WRITE DA728x 0xA7 0x77
+WRITE DA728x 0xA8 0x05
+WRITE DA728x 0xA9 0x08
+WRITE DA728x 0xAA 0x88
+WRITE DA728x 0xAB 0x01
+WRITE DA728x 0xAC 0x84
+WRITE DA728x 0xAD 0x77
+WRITE DA728x 0xAE 0x03
+WRITE DA728x 0xAF 0x84
+WRITE DA728x 0xB0 0x77
+WRITE DA728x 0xB1 0x08
+WRITE DA728x 0xB2 0xB0
+WRITE DA728x 0xB3 0x11
+WRITE DA728x 0xB4 0x9C
+WRITE DA728x 0xB5 0x77
+WRITE DA728x 0xB6 0x38
+WRITE DA728x 0xB7 0x11
+WRITE DA728x 0xB8 0x84
+WRITE DA728x 0xB9 0x77
+WRITE DA728x 0xBA 0x02
+WRITE DA728x 0xBB 0x18
+WRITE DA728x 0xBC 0x1C
+WRITE DA728x 0xBD 0x84
+WRITE DA728x 0xBE 0x77
+WRITE DA728x 0xBF 0x02
+WRITE DA728x 0xC0 0x18
+WRITE DA728x 0xC1 0x1C
+WRITE DA728x 0xC2 0x84
+WRITE DA728x 0xC3 0x77
+WRITE DA728x 0xC4 0x02
+WRITE DA728x 0xC5 0x18
+WRITE DA728x 0xC6 0x88
+WRITE DA728x 0xC7 0x39
+WRITE DA728x 0xC8 0x88
+WRITE DA728x 0xC9 0x18
+WRITE DA728x 0xCA 0x11
+WRITE DA728x 0xCB 0x18
+WRITE DA728x 0xCC 0x88
+WRITE DA728x 0xCD 0x11
+WRITE DA728x 0xCE 0x18
+WRITE DA728x 0xCF 0xA0
+WRITE DA728x 0xD0 0x31
+WRITE DA728x 0xD1 0x03
+WRITE DA728x 0xD2 0x18
+WRITE DA728x 0xD3 0x09
+WRITE DA728x 0xD4 0x1E
+WRITE DA728x 0xD5 0x14
+WRITE DA728x 0xD6 0x09
+WRITE DA728x 0xD7 0x02
+WRITE DA728x 0xD8 0x88
+WRITE DA728x 0xD9 0x11
+WRITE DA728x 0xDA 0x02
+WRITE DA728x 0xDB 0x88
+WRITE DA728x 0xDC 0x18
+WRITE DA728x 0xDD 0x11
+WRITE DA728x 0xDE 0x02
+WRITE DA728x 0xDF 0x88
+WRITE DA728x 0xE0 0x18
+WRITE DA728x 0xE1 0x39
+WRITE DA728x 0xE2 0x88
+WRITE DA728x 0xE3 0x18
+WRITE DA728x 0xE4 0x00
+WRITE DA728x 0xE5 0x00
+WRITE DA728x 0xE6 0x00
+WRITE DA728x 0xE7 0x00`;
+
+function loadExample() {
+  doImport(EXAMPLE_HEX);
+}
+
+// ===========================================================================
+// IMPORT
+// ===========================================================================
+function doImport(text) {
+  const result = parseImport(text);
+  const status = document.getElementById('import-status');
+  if (!result) {
+    status.textContent = 'No WRITE lines or hex bytes detected.';
+    status.style.color = 'var(--err)';
+    toast('Nothing to import', 'err');
+    return;
+  }
+  if (result.error) {
+    status.textContent = result.error;
+    status.style.color = 'var(--err)';
+    toast('Import failed: ' + result.error, 'err');
+    return;
+  }
+  // Apply detected IC config settings (ACCELERATION_EN, FREQ_WAVEFORM_TIMEBASE)
+  // before loading snippets so AMP clamping and timebase labels are correct.
+  const applied = [];
+  if (result.detectedAccel !== null && result.detectedAccel !== undefined) {
+    state.accelerationEn = result.detectedAccel;
+    const sel = document.getElementById('cfg-accel');
+    if (sel) sel.value = String(result.detectedAccel);
+    applied.push(`ACCELERATION_EN=${result.detectedAccel}`);
+  }
+  if (result.detectedFwtb !== null && result.detectedFwtb !== undefined) {
+    state.freqWaveformTimebase = result.detectedFwtb;
+    const sel = document.getElementById('cfg-fwtb');
+    if (sel) sel.value = String(result.detectedFwtb);
+    applied.push(`FREQ_WAVEFORM_TIMEBASE=${result.detectedFwtb}`);
+  }
+  state.snippets = result.snippets;
+  state.sequences = result.sequences;
+  state.baseAddr = result.base;
+  state.selection = { type: null, index: -1 };
+  let statusLine = `Loaded ${result.nSnp} snippet(s), ${result.nSeq} sequence(s) from base 0x${result.base.toString(16).toUpperCase()}.`;
+  if (result.totalWrites > result.wavWrites) {
+    statusLine += ` Skipped ${result.totalWrites - result.wavWrites} IC config write(s) outside 0x84-0xE7.`;
+  }
+  if (applied.length) {
+    statusLine += ` Detected: ${applied.join(', ')}.`;
+  }
+  status.textContent = statusLine;
+  status.style.color = 'var(--ok)';
+  toast(`Imported ${result.nSnp} snippets, ${result.nSeq} sequences`, 'ok');
+  renderAll();
+}
+
+// ===========================================================================
+// UTILITIES
+// ===========================================================================
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+}
+
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || '');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+function copyText(id) {
+  const el = document.getElementById(id);
+  el.select();
+  document.execCommand('copy');
+  toast('Copied', 'ok');
+}
+
+function downloadText(id, filename) {
+  const el = document.getElementById(id);
+  const blob = new Blob([el.value], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ===========================================================================
+// WIRING
+// ===========================================================================
+document.getElementById('snp-add').onclick = addSnippet;
+document.getElementById('seq-add').onclick = addSequence;
+document.getElementById('btn-clear').onclick = clearAll;
+document.getElementById('btn-example').onclick = loadExample;
+document.getElementById('btn-import').onclick = () => doImport(document.getElementById('import-in').value);
+
+// Top-level tabs (Snippets / Sequences / Memory)
+function setTopTab(name) {
+  document.querySelectorAll('.ttab').forEach(b => b.classList.toggle('active', b.dataset.ttab === name));
+  document.querySelectorAll('.ttab-panel').forEach(p => p.classList.toggle('active', p.dataset.ttab === name));
+  // Show the relevant add button
+  document.getElementById('snp-add').style.display = name === 'snippets' ? 'inline-block' : 'none';
+  document.getElementById('seq-add').style.display = name === 'sequences' ? 'inline-block' : 'none';
+  // Redraw tile canvases now that they're visible (canvas size needs non-zero clientWidth)
+  requestAnimationFrame(() => renderAll());
+}
+document.querySelectorAll('.ttab').forEach(btn => {
+  btn.onclick = () => setTopTab(btn.dataset.ttab);
+});
+
+// File upload handling for Import tab
+function readTxtFile(file) {
+  if (!file) return;
+  document.getElementById('file-label').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const text = ev.target.result;
+    document.getElementById('import-in').value = text;
+    doImport(text);
+  };
+  reader.onerror = () => toast('Failed to read file', 'err');
+  reader.readAsText(file);
+}
+document.getElementById('file-input').addEventListener('change', (e) => {
+  if (e.target.files && e.target.files[0]) readTxtFile(e.target.files[0]);
+  // reset so the same file can be loaded again
+  e.target.value = '';
+});
+
+const drop = document.getElementById('file-drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, (e) => {
+  e.preventDefault(); e.stopPropagation(); drop.classList.add('dragging');
+}));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, (e) => {
+  e.preventDefault(); e.stopPropagation(); drop.classList.remove('dragging');
+}));
+drop.addEventListener('drop', (e) => {
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+    readTxtFile(e.dataTransfer.files[0]);
+  }
+});
+
+document.getElementById('cfg-accel').onchange = (e) => {
+  state.accelerationEn = parseInt(e.target.value, 10);
+  // Reinterpret AMP values that are out of range for the new mode
+  for (const s of state.snippets) {
+    for (const p of s.points) p.amp = clampAmp(p.amp, state.accelerationEn);
+  }
+  renderAll();
+};
+document.getElementById('cfg-fwtb').onchange = (e) => {
+  state.freqWaveformTimebase = parseInt(e.target.value, 10);
+  renderAll();
+};
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.onclick = () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tab === tab));
+  };
+});
+
+window.addEventListener('resize', () => renderPreview());
+
+// Initial render
+renderAll();
+</script>
+</body>
+</html>
