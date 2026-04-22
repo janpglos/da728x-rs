@@ -46,3 +46,13 @@ pub fn rtwm_frequency_track() -> DeviceConfig {
         rapid_stop: false,
     }
 }
+
+/// RTWM (Register-Triggered Waveform Memory) mode in wideband mode
+pub fn rtwm_wideband() -> DeviceConfig {
+    DeviceConfig {
+        operation_mode: OperationMode::RTWM_MODE,
+        driving_mode: DrivingMode::WIDEBAND,
+        acceleration: false,
+        rapid_stop: false,
+    }
+}
