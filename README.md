@@ -30,14 +30,9 @@ An async and no_std rust library for the wide-bandwidth haptic driver IC DA7280/
 - `debug` - Enable debug logging with the `defmt` crate
 
 
-## Waveform Builder
-![a screenshot of the builder UI](media/builder1.png "Waveform Builder")
-![a screenshot of the builder UI](media/builder.png "Waveform Builder")
+# Basic Usage
+For simple patterns and basic use, we can directly write to a register in DRO mode to change the intensity of the LRA.
 
-Included is a standalone waveform builder in the form of a web application to interactively build the snippets and sequences to build haptic patterns.
-Just open the [the waveform builder](tools/waveform_builder.html) file in your web-browser. Disclaimer: This was built with an LLM.
-
-# Usage
 ```rust
     use da728x::{DA728x, Variant};
     use da728x::config::{ActuatorConfig, ActuatorType, DeviceConfig, OperationMode, DrivingMode};
@@ -59,7 +54,7 @@ Just open the [the waveform builder](tools/waveform_builder.html) file in your w
         impedance_mOhm: 13_800,
         inductance_uH: 50,
         frequency_Hz: 170,
-        pid_Kp_Ki: None,
+        pid_Kp_Ki: None, // Optional
     };
 
     // DRO Mode, which means we can set the amplitude via set_override_value()
@@ -73,7 +68,7 @@ Just open the [the waveform builder](tools/waveform_builder.html) file in your w
     // Sets all registers as needed depending on the actuator type, operation mode and driving mode
     haptics.configure(actuator_config, device_config).await.unwrap();
 
-    // Enables the Operation Mode (default is INACTIVE after configuration)
+    // Enables the configured Operation Mode (default is INACTIVE after configuration)
     haptics.enable().await.unwrap();
 
     loop {
@@ -92,6 +87,49 @@ Just open the [the waveform builder](tools/waveform_builder.html) file in your w
     }
 
 ```
+
+# Patterns
+Two build more advanced haptic patterns that will be programmed into the waveform memory of the IC, you have two options: 
+- Waveform Builder (exports waveform memory)
+- Builder Pattern (building patterns programmatically)
+
+## Waveform Builder
+![a screenshot of the builder UI](media/builder1.png "Waveform Builder")
+![a screenshot of the builder UI](media/builder.png "Waveform Builder")
+
+Included is a standalone waveform builder in the form of a web application to interactively build the snippets and sequences to build haptic patterns.
+Just open the [the waveform builder](tools/waveform_builder.html) file in your web-browser. Disclaimer: This was built with an LLM. If you don't want to use the tool or you want to build the waveform memory programmatically, you can use the builder pattern.
+
+This tool generates a rust snippet which you can paste in your code and load into waveform memory.
+```rust
+// Auto-generated DA7280 waveform memory
+pub const DA7280_WAVEFORM_MEMORY: WaveformMemory = WaveformMemory::from_bytes(
+    [
+        0x07, 0x0B, 0x14, 0x15, 0x16, 0x1A, 0x1E, 0x1F, 0x20, 0x23, 0x25, 0x27, 0x2D, 0x38, 0x39,
+        0x40, 0x43, 0x47, 0x48, 0x49, 0x77, 0x29, 0x47, 0xF7, 0xF0, 0xF9, 0xF0, 0x77, 0x77, 0x70,
+        0x70, 0xF7, 0xF0, 0x01, 0x88, 0x18, 0x01, 0x18, 0x03, 0x18, 0x03, 0x10, 0xB8, 0x31, 0x88,
+        0x18, 0x01, 0x88, 0x10, 0x90, 0x01, 0x88, 0x10, 0x90, 0x29, 0xA8, 0x18, 0x14, 0x05, 0xA8,
+        0x18, 0x0D, 0x88, 0x05, 0xA8, 0x01, 0x02, 0x18, 0x1E, 0x11, 0x1F, 0x00, 0x19, 0x39, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ],  //
+    74, // number of bytes in memory 
+    7,  // number of snippets
+    11, // number of sequences
+);
+
+// main
+// let mut haptics = DA728x::new(...);
+// haptics.configure(...);
+haptics.upload_waveform_memory(&DA7280_WAVEFORM_MEMORY, true).await?; // lock after writing
+haptics.enable().await?;
+
+haptics.play_sequence(n, 0).await?; // play any sequence from memory
+```
+
+## Builder Pattern
+See simple_dro.rs and waveform_effects.rs.
+
 
 # Devkits
 - [SparkFun Haptic Driver (ROB-17590)](https://www.sparkfun.com/sparkfun-qwiic-haptic-driver-da7280.html)
