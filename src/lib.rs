@@ -24,11 +24,13 @@ use crate::registers::SEQ_CTL1;
 use crate::registers::SEQ_CTL2;
 use crate::registers::TOP_CFG2;
 use crate::registers::TOP_CFG4;
+use crate::registers::TOP_CFG5;
 use crate::registers::TOP_CTL2;
 use crate::registers::TOP_INT_CFG6_H;
 use crate::registers::TOP_INT_CFG6_L;
 use crate::registers::TOP_INT_CFG7_H;
 use crate::registers::TOP_INT_CFG7_L;
+use crate::registers::TOP_INT_CFG8;
 use crate::registers::TRIM4;
 use crate::waveform::WaveformMemory;
 
@@ -125,12 +127,12 @@ where
         }
         match device_config.driving_mode {
             DrivingMode::FREQUENCY_TRACK => {
-                if !(50..300).contains(&actuator_config.frequency_Hz) {
+                if !(50..=300).contains(&actuator_config.frequency_Hz) {
                     return Err(Error::InvalidValue);
                 }
             }
             DrivingMode::WIDEBAND | DrivingMode::CUSTOM_WAVEFORM => {
-                if !(50..300).contains(&actuator_config.frequency_Hz) {
+                if !(25..=1024).contains(&actuator_config.frequency_Hz) {
                     return Err(Error::InvalidValue);
                 }
             }
@@ -173,9 +175,13 @@ where
         let top_cfg2_val = self.read_register(Register::TOP_CFG2).await?;
         let top_cfg2 = TOP_CFG2::from(top_cfg2_val)
             .with_MEM_DATA_SIGNED(!acceleration_en);
-        #[cfg(feature = "debug")]
-        debug!("TOP_CFG2: accel_en={}, MEM_DATA_SIGNED={}, val={:02X}", acceleration_en, !acceleration_en, u8::from(top_cfg2));
         self.write_register(Register::TOP_CFG2, top_cfg2.into()).await?;
+
+        // TOP_CFG5 - V2I_FACTOR_OFFSET_EN must match acceleration
+        // V2I_FACTOR_OFFSET_EN = 0 when ACCELERATION_EN = 0
+        // V2I_FACTOR_OFFSET_EN = 1 when ACCELERATION_EN = 1
+        let top_cfg5 = TOP_CFG5::new().with_V2I_FACTOR_OFFSET_EN(acceleration_en);
+        self.write_register(Register::TOP_CFG5, top_cfg5.into()).await?;
 
         // ACTUATOR1 (nom max volt)
         let volt_converted = ((actuator_config.nominal_max_mV as u32 * 1000) / 23400) as u8;
@@ -258,17 +264,27 @@ where
             self.write_register(Register::TOP_INT_CFG7_L, top_int_cfg7_l.into()).await?;
         }
 
-        // TODO: additional registers may need to be set with
-        // acceleration and rapid stop enabled
-
         // Default resonant frequency
-        let frequency_converted =  (1000000000 / (actuator_config.frequency_Hz as u32 * 1333)) as u16;
+        let frequency_converted =  (1_000_000_000 as u64 * 100 / (actuator_config.frequency_Hz as u64 * 133332)) as u16;
         let frequency_converted_h: u8 = ((frequency_converted >> 7) & 0xFF) as u8;
         let frequency_converted_l: u8 = (frequency_converted & 0x7F) as u8;
         let frq_lra_per_h = FRQ_LRA_PER_H::from(frequency_converted_h);
         let frq_lra_per_l = FRQ_LRA_PER_L::new().with_LRA_PER_L(frequency_converted_l);
         self.write_register(Register::FRQ_LRA_PER_H, frq_lra_per_h.into()).await?;
         self.write_register(Register::FRQ_LRA_PER_L, frq_lra_per_l.into()).await?;
+
+        // Rapid Stop
+        // TOP_INT_CFG8 -> TST_AMP_RAPID_STOP_LIM = 7 with rapid stop OFF
+        // With rapid stop on, tune TOP_INT_CFG8 and TOP_INT_CFG1
+        if !device_config.rapid_stop {
+            let top_int_cfg8_val = self.read_register(Register::TOP_INT_CFG8).await?;
+            let top_int_cfg8 = TOP_INT_CFG8::from(top_int_cfg8_val).with_RAPID_STOP_LIM(7);
+            self.write_register(Register::TOP_INT_CFG8, top_int_cfg8.into()).await?;
+        }
+        else {
+            todo!("TOP_INT_CFG8 and TOP_INT_CFG1 are not yet set correctly with rapid stop enabled.");
+        }
+
 
         // Additional configuration depending on DrivingMode
 
@@ -310,6 +326,7 @@ where
         let irq_event1 = IRQ_EVENT1::from(self.read_register(Register::IRQ_EVENT1).await?);
         let irq_event_warning_diag = IRQ_EVENT_WARNING_DIAG::from(self.read_register(Register::IRQ_EVENT_WARNING_DIAG).await?);
         let irq_event_seq_diag = IRQ_EVENT_SEQ_DIAG::from(self.read_register(Register::IRQ_EVENT_SEQ_DIAG).await?);
+        //TODO: IRQ_EVENT_ACTUATOR_FAULT could be read as well. However, it is already cleared with writing to IRQ_EVENT->E_ACTUATOR.
 
         // Clear events (only IRQ_EVENT1)
         self.write_register(Register::IRQ_EVENT1, 0xFF).await?;
@@ -333,18 +350,18 @@ where
         // Different frequency ranges with normal mode and wide-band/custom waveform mode
         match device_config.driving_mode {
             DrivingMode::FREQUENCY_TRACK => {
-                if !(50..300).contains(&frequency_hz) {
+                if !(50..=300).contains(&frequency_hz) {
                     return Err(Error::InvalidValue);
                 }
             }
             DrivingMode::WIDEBAND | DrivingMode::CUSTOM_WAVEFORM => {
-                if !(25..1024).contains(&frequency_hz) {
+                if !(25..=1024).contains(&frequency_hz) {
                     return Err(Error::InvalidValue);
                 }
             }
         }
 
-        let frequency_converted =  (1000000000 / (frequency_hz as u32 * 1333)) as u16;
+        let frequency_converted =  (1_000_000_000 as u64 * 100 / (frequency_hz as u64 * 133332)) as u16;
         let frequency_converted_h: u8 = ((frequency_converted >> 7) & 0xFF) as u8;
         let frequency_converted_l: u8 = (frequency_converted & 0x7F) as u8;
         let frq_lra_per_h = FRQ_LRA_PER_H::from(frequency_converted_h);
