@@ -24,10 +24,12 @@ pub enum Register {
     TOP_CFG1 = 0x13,
     TOP_CFG2 = 0x14,
     TOP_CFG4 = 0x16,
+    TOP_INT_CFG1 = 0x17,
     TOP_INT_CFG6_H = 0x1C,
     TOP_INT_CFG6_L = 0x1D,
     TOP_INT_CFG7_H = 0x1E,
     TOP_INT_CFG7_L = 0x1F,
+    TOP_INT_CFG8 = 0x20,
     TOP_CTL1 = 0x22,
     TOP_CTL2 = 0x23,
     SEQ_CTL1 = 0x24,
@@ -211,6 +213,15 @@ pub struct TOP_CFG4 {
     pub V2I_FACTOR_FREEZE: bool,
 }
 
+/// TOP_INT_CFG1 register (0x17)
+#[bitfield(u8)]
+pub struct TOP_INT_CFG1 {
+    #[bits(2)]
+    pub BEMF_FAULT_LIM: u8,
+    #[bits(6)]
+    pub FRQ_LOCKED_LIM: u8,
+}
+
 /// TOP_INT_CFG6_H register (0x1C)
 #[bitfield(u8)]
 pub struct TOP_INT_CFG6_H {
@@ -233,6 +244,15 @@ pub struct TOP_INT_CFG7_H {
 #[bitfield(u8)]
 pub struct TOP_INT_CFG7_L {
     pub FRQ_PID_Ki_L: u8,
+}
+
+/// TOP_INT_CFG8 register (0x20)
+#[bitfield(u8)]
+pub struct TOP_INT_CFG8 {
+    #[bits(4)]
+    pub FRQ_TRACK_BEMF_LIM: u8,
+    #[bits(4)]
+    pub RAPID_STOP_LIM: u8 
 }
 
 /// TOP_CTL1 register (0x22)

@@ -107,7 +107,7 @@ async fn main(_spawner: Spawner) {
         for n in 0..DA7280_WAVEFORM_MEMORY.num_sequences() {
             info!("Sequence: {}", n);
             haptics.play_sequence(n, 0).await.unwrap();
-            Timer::after_millis(5_000).await;
+            Timer::after_millis(4_000).await;
         }
 
         if !common::demo::handle_faults(&mut haptics).await {
