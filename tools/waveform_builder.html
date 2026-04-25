@@ -481,6 +481,112 @@
   .toast.show { opacity: 1; transform: translateY(0); }
   .toast.err { border-left-color: var(--err); }
   .toast.ok { border-left-color: var(--ok); }
+  /* ---- Playback preview ---- */
+  .preview-wrap {
+    position: relative;
+    display: block;
+  }
+  .preview-wrap canvas {
+    display: block;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .tile.seq .preview-wrap.is-playing canvas {
+    border-color: var(--seq);
+    box-shadow: 0 0 8px -2px rgba(38,166,154,0.35);
+  }
+  /* Intensity glow overlay — rises from the waveform baseline */
+  .preview-wrap .glow-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    border-radius: 3px;
+    opacity: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 85%, rgba(126,87,194,0.55) 0%, transparent 100%),
+      linear-gradient(0deg, rgba(126,87,194,0.08) 0%, transparent 50%);
+    mix-blend-mode: screen;
+  }
+  .preview-wrap.seq-glow .glow-overlay {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 85%, rgba(38,166,154,0.50) 0%, transparent 100%),
+      linear-gradient(0deg, rgba(38,166,154,0.08) 0%, transparent 50%);
+  }
+  /* Play button — compact, glass-like, theme-aware */
+  .play-btn {
+    position: absolute;
+    bottom: 5px; right: 5px;
+    width: 24px; height: 24px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(10,15,21,0.6);
+    border: 1px solid rgba(45,54,67,0.7);
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    opacity: 0;
+    transform: scale(0.85);
+    transition: opacity 0.15s, transform 0.15s, background 0.15s, border-color 0.2s, color 0.15s, box-shadow 0.2s;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .tile:hover .play-btn,
+  .preview-wrap:hover > .play-btn,
+  .play-btn:focus-visible {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .play-btn:hover {
+    background: rgba(15,20,25,0.85);
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .play-btn:active { transform: scale(0.92); }
+  .play-btn svg {
+    display: block;
+    width: 10px; height: 10px;
+    transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .play-btn.playing {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .tile.seq .play-btn.playing {
+    background: rgba(38,166,154,0.15);
+    border-color: rgba(38,166,154,0.5);
+    color: var(--seq);
+    box-shadow: 0 0 8px -1px rgba(38,166,154,0.25);
+  }
+  /* Playback cursor — luminous scan line with bloom */
+  .playback-cursor {
+    position: absolute;
+    top: 1px; bottom: 1px;
+    width: 1px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .playback-cursor.active { opacity: 1; }
+  .playback-cursor::before {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; left: -1px; right: -1px;
+    background: var(--accent);
+    border-radius: 1px;
+  }
+  .playback-cursor::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: -3px; right: -3px;
+    background: var(--accent);
+    border-radius: 2px;
+    opacity: 0.25;
+    filter: blur(3px);
+  }
   @media (max-width: 1100px) {
     main { grid-template-columns: 1fr; }
   }
@@ -2440,6 +2546,605 @@ document.querySelectorAll('.tab').forEach(btn => {
 });
 
 window.addEventListener('resize', () => renderPreview());
+
+// ===========================================================================
+// AUDIO ENGINE & PLAYBACK
+// ===========================================================================
+class AudioEngine {
+  constructor() {
+    this.ctx = null;
+    this.masterGain = null;
+  }
+  ensure() {
+    if (this.ctx) return;
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = 0.25;
+    this.masterGain.connect(this.ctx.destination);
+  }
+  resume() {
+    this.ensure();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  }
+  // Play a sine tone. Returns { stop(), setGain(g), setFreq(f) }
+  playTone(freqHz) {
+    this.resume();
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freqHz;
+    gain.gain.value = 0;
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start();
+    return {
+      setGain(g) { gain.gain.setTargetAtTime(g, audioEngine.ctx.currentTime, 0.005); },
+      setFreq(f) { osc.frequency.setTargetAtTime(f, audioEngine.ctx.currentTime, 0.005); },
+      stop() { try { osc.stop(); } catch(e){} },
+    };
+  }
+}
+
+const audioEngine = new AudioEngine();
+
+// Active playback state
+let activePlayback = null;
+
+const PLAY_SVG = '<svg width="10" height="10" viewBox="0 0 12 14" fill="currentColor"><polygon points="0,0 12,7 0,14"/></svg>';
+const STOP_SVG = '<svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect x="1" y="1" width="8" height="8" rx="1"/></svg>';
+
+function setBtnPlaying(btn, playing) {
+  btn.classList.toggle('playing', playing);
+  btn.innerHTML = playing ? STOP_SVG : PLAY_SVG;
+  btn.title = playing ? 'Stop preview' : 'Preview haptic pattern';
+}
+
+function stopPlayback() {
+  if (!activePlayback) return;
+  cancelAnimationFrame(activePlayback.raf);
+  activePlayback.tone.stop();
+  activePlayback.elements.forEach(el => {
+    if (el.glow) el.glow.style.opacity = '0';
+    el.cursor.classList.remove('active');
+    el.wrap.classList.remove('is-playing');
+    setBtnPlaying(el.btn, false);
+  });
+  activePlayback = null;
+}
+
+// Compute the playback envelope for a sequence.
+// Returns array of { timeMs, amplitude, freqHz }
+function sequenceEnvelope(seq) {
+  if (!seq || seq.frames.length === 0) return [];
+  const tb = currentTimebaseMs();
+  const accel = state.accelerationEn;
+  const envelope = [];
+  let totalMs = 0;
+  let prevAmpNorm = 0;
+
+  for (let fi = 0; fi < seq.frames.length; fi++) {
+    const f = seq.frames[fi];
+    const iters = f.snpIdLoop + 1;
+    const tbMs = tb[f.timebase];
+    const gainMul = Math.pow(10, GAIN_DB[f.gain] / 20);
+    const freqHz = f.freqCmd ? f.freq * 2 : null;
+
+    for (let it = 0; it < iters; it++) {
+      let snp = null;
+      let snpTbTotal = 2;
+      if (f.snpId === 0) {
+        snpTbTotal = 2;
+      } else if (state.snippets[f.snpId - 1]) {
+        snp = state.snippets[f.snpId - 1];
+        snpTbTotal = snp.points.reduce((a, p) => a + (p.time + 1), 0) || 1;
+      }
+
+      if (!snp || snp.points.length === 0) {
+        envelope.push({ timeMs: totalMs, amplitude: 0, freqHz });
+        totalMs += snpTbTotal * tbMs;
+        envelope.push({ timeMs: totalMs, amplitude: 0, freqHz });
+        prevAmpNorm = 0;
+        continue;
+      }
+
+      let segTbElapsed = 0;
+      for (const pt of snp.points) {
+        const a = ampToNorm(pt.amp, accel) * gainMul;
+        const durTb = pt.time + 1;
+        const ptMs = durTb * tbMs;
+        segTbElapsed += ptMs;
+        if (pt.rmp) {
+          const steps = 4;
+          for (let s = 1; s <= steps; s++) {
+            const frac = s / steps;
+            envelope.push({
+              timeMs: totalMs + segTbElapsed - ptMs + frac * ptMs,
+              amplitude: prevAmpNorm + (a - prevAmpNorm) * frac,
+              freqHz,
+            });
+          }
+        } else {
+          envelope.push({ timeMs: totalMs + segTbElapsed - ptMs, amplitude: a, freqHz });
+          envelope.push({ timeMs: totalMs + segTbElapsed - 0.01, amplitude: a, freqHz });
+        }
+        prevAmpNorm = a;
+      }
+      totalMs += snpTbTotal * tbMs;
+    }
+  }
+  return envelope;
+}
+
+// Interpolate envelope at a given time
+function envelopeAt(env, timeMs) {
+  if (env.length === 0) return { amplitude: 0, freqHz: null };
+  if (timeMs <= env[0].timeMs) return { amplitude: env[0].amplitude, freqHz: env[0].freqHz };
+  for (let i = 1; i < env.length; i++) {
+    if (timeMs <= env[i].timeMs) {
+      const t0 = env[i - 1].timeMs;
+      const t1 = env[i].timeMs;
+      const frac = t1 > t0 ? (timeMs - t0) / (t1 - t0) : 0;
+      return {
+        amplitude: env[i - 1].amplitude + (env[i].amplitude - env[i - 1].amplitude) * frac,
+        freqHz: env[i].freqHz !== undefined ? env[i].freqHz : env[i - 1].freqHz,
+      };
+    }
+  }
+  return { amplitude: env[env.length - 1].amplitude, freqHz: env[env.length - 1].freqHz };
+}
+
+// Default resonant frequency of a typical LRA (Hz)
+const DEFAULT_LRA_FREQ = 170;
+
+function playSequence(seq, elements) {
+  stopPlayback();
+  audioEngine.resume();
+
+  const env = sequenceEnvelope(seq);
+  if (env.length === 0) return;
+
+  const totalMs = env[env.length - 1].timeMs;
+  if (totalMs <= 0) return;
+
+  const tone = audioEngine.playTone(DEFAULT_LRA_FREQ);
+
+  elements.forEach(el => {
+    el.wrap.classList.add('is-playing');
+    setBtnPlaying(el.btn, true);
+  });
+
+  const startReal = performance.now();
+
+  function frame(now) {
+    const elapsed = now - startReal;
+    const progress = elapsed / totalMs;
+
+    if (progress >= 1) {
+      tone.setGain(0);
+      elements.forEach(el => {
+        if (el.glow) el.glow.style.opacity = '0';
+        el.cursor.classList.remove('active');
+        el.cursor.style.left = '100%';
+        el.wrap.classList.remove('is-playing');
+        setBtnPlaying(el.btn, false);
+      });
+      activePlayback = null;
+      return;
+    }
+
+    const { amplitude, freqHz } = envelopeAt(env, elapsed);
+    const amp = Math.max(0, Math.min(1, Math.abs(amplitude)));
+
+    tone.setGain(amp * 0.8);
+    tone.setFreq(freqHz || DEFAULT_LRA_FREQ);
+
+    elements.forEach(el => {
+      if (el.glow) el.glow.style.opacity = String(amp);
+      const rect = el.wrap.getBoundingClientRect();
+      const canvasEl = el.wrap.querySelector('canvas');
+      if (canvasEl) {
+        const cRect = canvasEl.getBoundingClientRect();
+        const x = cRect.left - rect.left + cRect.width * progress;
+        el.cursor.style.left = x + 'px';
+      }
+      el.cursor.classList.add('active');
+    });
+
+    activePlayback.raf = requestAnimationFrame(frame);
+  }
+
+  activePlayback = { tone, elements, raf: requestAnimationFrame(frame) };
+}
+
+function makePlayBtn() {
+  const btn = document.createElement('button');
+  btn.className = 'play-btn';
+  btn.title = 'Preview haptic pattern';
+  btn.innerHTML = PLAY_SVG;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (activePlayback) { stopPlayback(); return; }
+    btn._onPlay();
+  });
+  return btn;
+}
+
+// ===========================================================================
+// OVERRIDE TILE & EDITOR RENDERING (integrate play buttons + glow)
+// ===========================================================================
+
+// --- renderSnippetTiles (no playback) ---
+renderSnippetTiles = function() {
+  const grid = document.getElementById('snp-tiles');
+  grid.innerHTML = '';
+  document.getElementById('snp-count').textContent = state.snippets.length;
+
+  state.snippets.forEach((s, i) => {
+    const tile = document.createElement('div');
+    tile.className = 'tile snp';
+    if (state.selection.type === 'snippet' && state.selection.index === i) tile.classList.add('active');
+
+    const nBytes = Math.max(1, s.points.length);
+    const totalTb = s.points.reduce((a, p) => a + (p.time + 1), 0);
+    const desc = s.points.map(p => `${p.rmp?'↗':'—'}${p.amp>=0?'+':''}${p.amp}`).join(' ');
+
+    tile.innerHTML = `
+      <div class="tile-head">
+        <span class="tile-title">SNP_${i+1}</span>
+        <span class="tile-meta">${nBytes}B · ${totalTb || 0}tb</span>
+      </div>
+      <canvas></canvas>
+      <div class="tile-preview">${escapeHtml(desc || '(empty)')}</div>
+    `;
+    tile.onclick = () => { select('snippet', i); };
+    grid.appendChild(tile);
+
+    const cv = tile.querySelector('canvas');
+    requestAnimationFrame(() => drawSnippetPreview(cv, s, { compact: true }));
+  });
+
+  const addTile = document.createElement('div');
+  addTile.className = 'tile tile-new';
+  addTile.textContent = state.snippets.length === 0
+    ? '+ Add your first snippet — click here'
+    : '+ Add snippet';
+  addTile.onclick = addSnippet;
+  grid.appendChild(addTile);
+};
+
+// --- renderSequenceTiles (with play wrapper) ---
+renderSequenceTiles = function() {
+  const grid = document.getElementById('seq-tiles');
+  grid.innerHTML = '';
+  document.getElementById('seq-count').textContent = state.sequences.length;
+
+  state.sequences.forEach((s, i) => {
+    const tile = document.createElement('div');
+    tile.className = 'tile seq';
+    if (state.selection.type === 'sequence' && state.selection.index === i) tile.classList.add('active');
+
+    const nBytes = s.frames.reduce((a, f) => a + frameBytes(f).length, 0) || 1;
+    const desc = s.frames.map(f => {
+      let str = `S${f.snpId}×${f.snpIdLoop+1}`;
+      if (f.freqCmd) str += `@${f.freq*2}Hz`;
+      return str;
+    }).join(' → ');
+
+    tile.innerHTML = `
+      <div class="tile-head">
+        <span class="tile-title">SEQ_${i}</span>
+        <span class="tile-meta">${s.frames.length}fr · ${nBytes}B</span>
+      </div>
+      <div class="preview-wrap seq-glow"></div>
+      <div class="tile-preview">${escapeHtml(desc || '(empty)')}</div>
+    `;
+    tile.onclick = (e) => { if (!e.target.closest('.play-btn')) select('sequence', i); };
+    grid.appendChild(tile);
+
+    const wrap = tile.querySelector('.preview-wrap');
+    const cv = document.createElement('canvas');
+    const glow = document.createElement('div');
+    glow.className = 'glow-overlay';
+    const cursor = document.createElement('div');
+    cursor.className = 'playback-cursor';
+    const btn = makePlayBtn();
+    btn._onPlay = () => {
+      const seq = state.sequences[i];
+      if (!seq) return;
+      const edEl = document.querySelector('#editor-body .seq-preview');
+      const elements = [{ wrap, glow, cursor, btn }];
+      if (edEl && edEl._pb) elements.push(edEl._pb);
+      playSequence(seq, elements);
+    };
+    wrap.appendChild(cv);
+    wrap.appendChild(glow);
+    wrap.appendChild(cursor);
+    wrap.appendChild(btn);
+    wrap._pb = { wrap, glow, cursor, btn };
+
+    requestAnimationFrame(() => drawSequencePreview(cv, s, { compact: true }));
+  });
+
+  const addTile = document.createElement('div');
+  addTile.className = 'tile tile-new';
+  addTile.textContent = state.sequences.length === 0
+    ? '+ Add your first sequence — click here'
+    : '+ Add sequence';
+  addTile.onclick = addSequence;
+  grid.appendChild(addTile);
+};
+
+// --- buildSnippetEditor (no playback) ---
+buildSnippetEditor = function(idx) {
+  const snp = state.snippets[idx];
+  const box = document.createElement('div');
+  const accel = state.accelerationEn;
+  const ampHint = accel ? '0–15 (unsigned)' : '−7…+7 (signed)';
+
+  const cv = document.createElement('canvas');
+  cv.className = 'preview';
+  cv.id = 'preview-canvas';
+  cv.setAttribute('height', '160');
+  box.appendChild(cv);
+
+  // Toolbar row under preview
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = 'display:flex; align-items:center; gap:8px; margin: 10px 0 6px;';
+  toolbar.innerHTML = `
+    <span class="meta" style="color: var(--snp);">Snippet ${idx+1}</span>
+    <span class="meta">${snp.points.length} PWL point(s) · ${snp.points.length} byte(s)</span>
+    <div class="spacer" style="flex:1"></div>
+    <div class="btn-row">
+      <button class="small" data-act="add-point">+ Add point</button>
+      <button class="small danger" data-act="del-snp">Delete snippet</button>
+    </div>
+  `;
+  box.appendChild(toolbar);
+
+  const body = document.createElement('div');
+  const table = document.createElement('table');
+  table.className = 'editor';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>RMP</th>
+        <th>TIME (tb)</th>
+        <th>AMP (${ampHint})</th>
+        <th>byte</th>
+        <th></th>
+      </tr>
+    </thead>
+  `;
+  const tbody = document.createElement('tbody');
+  snp.points.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    const byte = pwlToByte(p, accel);
+    tr.innerHTML = `
+      <td class="num drag-handle" title="Drag to reorder">${i+1}</td>
+      <td>
+        <select data-i="${i}" data-f="rmp">
+          <option value="0" ${p.rmp?'':'selected'}>0 (step)</option>
+          <option value="1" ${p.rmp?'selected':''}>1 (ramp)</option>
+        </select>
+      </td>
+      <td>
+        <select data-i="${i}" data-f="time">
+          ${[0,1,2,3,4,5,6,7].map(v => `<option value="${v}" ${v===p.time?'selected':''}>${v} (${v+1} tb)</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="number" value="${p.amp}" min="${accel?0:-7}" max="${accel?15:7}" step="1" data-i="${i}" data-f="amp"></td>
+      <td><code style="color: var(--muted);">0x${byte.toString(16).toUpperCase().padStart(2,'0')}</code></td>
+      <td class="actions">
+        <button class="small danger icon-btn" data-act="del-point" data-i="${i}" title="Delete">${TRASH_SVG}</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  body.appendChild(table);
+
+  makeReorderable(tbody, snp.points, () => renderAll());
+
+  const help = document.createElement('p');
+  help.className = 'help';
+  help.innerHTML = `
+    PWL byte = <code>RMP[7] | TIME[6:4] | AMP[3:0]</code>. TIME value <i>n</i> = <i>n+1</i> timebases.
+    ${accel ? 'AMP is unsigned: 0 = silence, 15 = 100%.' : 'AMP is 2\u2019s complement: \u00b17 = \u00b1100%, \u22128 clamped to \u22127.'}
+    Snippets start from P0 = 0 amplitude at the beginning of a non-looped sequence.
+    Drag the # handle to reorder points.
+  `;  body.appendChild(help);
+  box.appendChild(body);
+
+  box.addEventListener('change', (e) => {
+    const i = parseInt(e.target.dataset.i);
+    const f = e.target.dataset.f;
+    if (isNaN(i) || !f) return;
+    let v = e.target.value;
+    if (f === 'rmp' || f === 'time') v = parseInt(v, 10);
+    if (f === 'amp') v = clampAmp(parseInt(v, 10), accel);
+    snp.points[i][f] = v;
+    renderAll();
+  });
+  box.addEventListener('click', (e) => {
+    const btn2 = e.target.closest('[data-act]');
+    if (!btn2) return;
+    const act = btn2.dataset.act;
+    if (act === 'add-point') {
+      snp.points.push({ rmp: 1, time: 2, amp: accel ? 15 : 7 });
+    } else if (act === 'del-snp') {
+      if (!confirm(`Delete snippet ${idx+1}?`)) return;
+      state.snippets.splice(idx, 1);
+      state.sequences.forEach(sq => sq.frames.forEach(fr => {
+        if (fr.snpId > idx + 1) fr.snpId--;
+        else if (fr.snpId === idx + 1) fr.snpId = 0;
+      }));
+      state.selection = { type: null, index: -1 };
+    } else if (act === 'del-point') {
+      const i = parseInt(btn2.dataset.i);
+      snp.points.splice(i, 1);
+    }
+    renderAll();
+  });
+
+  requestAnimationFrame(() => drawSnippetPreview(cv, snp));
+  return box;
+};
+
+// --- buildSequenceEditor (with play button) ---
+buildSequenceEditor = function(idx) {
+  const seq = state.sequences[idx];
+  const box = document.createElement('div');
+  const nBytes = seq.frames.reduce((a, f) => a + frameBytes(f).length, 0);
+
+  // Preview canvas with play button (no glow in editor)
+  const wrap = document.createElement('div');
+  wrap.className = 'preview-wrap seq-preview';
+  const cv = document.createElement('canvas');
+  cv.className = 'preview';
+  cv.id = 'preview-canvas';
+  cv.setAttribute('height', '160');
+  const cursorEl = document.createElement('div');
+  cursorEl.className = 'playback-cursor';
+  const btn = makePlayBtn();
+  btn._onPlay = () => {
+    if (!seq) return;
+    const tileWrap = document.querySelectorAll('#seq-tiles .tile.seq')[idx]?.querySelector('.preview-wrap');
+    const elements = [{ wrap, glow: null, cursor: cursorEl, btn }];
+    if (tileWrap && tileWrap._pb) elements.push(tileWrap._pb);
+    playSequence(seq, elements);
+  };
+  wrap._pb = { wrap, glow: null, cursor: cursorEl, btn };
+  wrap.appendChild(cv);
+  wrap.appendChild(cursorEl);
+  wrap.appendChild(btn);
+  box.appendChild(wrap);
+
+  // Toolbar row under preview
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = 'display:flex; align-items:center; gap:8px; margin: 10px 0 6px;';
+  toolbar.innerHTML = `
+    <span class="meta" style="color: var(--seq);">Sequence ${idx}</span>
+    <span class="meta">${seq.frames.length} frame(s) · ${nBytes} byte(s)</span>
+    <div class="spacer" style="flex:1"></div>
+    <div class="btn-row">
+      <button class="small" data-act="add-frame">+ Add frame</button>
+      <button class="small danger" data-act="del-seq">Delete sequence</button>
+    </div>
+  `;
+  box.appendChild(toolbar);
+
+  const body = document.createElement('div');
+  const tb = currentTimebaseMs();
+  const table = document.createElement('table');
+  table.className = 'editor';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>SNP_ID</th>
+        <th>GAIN</th>
+        <th>TIMEBASE</th>
+        <th>LOOP</th>
+        <th>FREQ</th>
+        <th>bytes</th>
+        <th></th>
+      </tr>
+    </thead>
+  `;
+  const tbody = document.createElement('tbody');
+  const maxSnpId = Math.max(15, state.snippets.length);
+  seq.frames.forEach((f, i) => {
+    const bs = frameBytes(f);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="num drag-handle" title="Drag to reorder">${i}</td>
+      <td>
+        <select data-i="${i}" data-f="snpId">
+          <option value="0" ${f.snpId===0?'selected':''}>0 · silence</option>
+          ${Array.from({length: maxSnpId}, (_, k) => `<option value="${k+1}" ${f.snpId===k+1?'selected':''}>${k+1}${k+1 <= state.snippets.length ? '' : ' (undef)'}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <select data-i="${i}" data-f="gain">
+          ${GAIN_DB.map((v, k) => `<option value="${k}" ${f.gain===k?'selected':''}>${v===0?'0dB':v+'dB'}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <select data-i="${i}" data-f="timebase">
+          ${tb.map((ms, k) => `<option value="${k}" ${f.timebase===k?'selected':''}>${ms} ms</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <select data-i="${i}" data-f="snpIdLoop">
+          ${Array.from({length: 16}, (_, k) => `<option value="${k}" ${f.snpIdLoop===k?'selected':''}>×${k+1}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <div style="display:inline-flex; align-items:center; gap:4px; white-space:nowrap;">
+          <input type="checkbox" data-i="${i}" data-f="freqCmd" ${f.freqCmd?'checked':''} title="Emit frequency command byte 3" style="margin:0;">
+          <input type="number" data-i="${i}" data-f="freq" value="${f.freq}" min="0" max="511" step="1" ${f.freqCmd?'':'disabled'} style="width: 56px;" title="FREQ[8:0] — drive Hz = value × 2">
+          <span style="color: var(--muted); font-size: 10px; min-width: 44px; display: inline-block; text-align: left;">${f.freqCmd ? (f.freq*2)+' Hz' : '—'}</span>
+        </div>
+      </td>
+      <td><code style="color: var(--muted);">${bs.map(b => '0x' + b.toString(16).toUpperCase().padStart(2,'0')).join(' ')}</code></td>
+      <td class="actions">
+        <button class="small danger icon-btn" data-act="del-frame" data-i="${i}" title="Delete">${TRASH_SVG}</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  body.appendChild(table);
+
+  makeReorderable(tbody, seq.frames, () => renderAll());
+
+  const help = document.createElement('p');
+  help.className = 'help';
+  help.innerHTML = `
+    Frame byte 1 (mandatory): <code>CMD_TYPE=0 | GAIN[1:0] | TIMEBASE[1:0] | SNP_ID_L[2:0]</code>.
+    Byte 2 (optional, if loop>0 or SNP_ID>7 or FREQ_CMD): <code>CMD_TYPE=1 | SNP_ID_LOOP[3:0] | FREQ_CMD | FREQ[8] | SNP_ID_H</code>.
+    Byte 3 (if FREQ_CMD=1): <code>FREQ[7:0]</code>. FREQ (Hz) = value × 2, 25–1024 Hz range.
+    Drag the # handle to reorder frames.
+  `;
+  body.appendChild(help);
+  box.appendChild(body);
+
+  box.addEventListener('change', (e) => {
+    const i = parseInt(e.target.dataset.i);
+    const f = e.target.dataset.f;
+    if (isNaN(i) || !f) return;
+    const fr = seq.frames[i];
+    if (e.target.type === 'checkbox') {
+      fr[f] = e.target.checked;
+    } else {
+      let v = e.target.value;
+      if (f === 'freq') v = Math.max(0, Math.min(511, parseInt(v, 10) || 0));
+      else v = parseInt(v, 10);
+      fr[f] = v;
+    }
+    renderAll();
+  });
+  box.addEventListener('click', (e) => {
+    const btn2 = e.target.closest('[data-act]');
+    if (!btn2) return;
+    const act = btn2.dataset.act;
+    if (act === 'add-frame') {
+      seq.frames.push({ snpId: 1, gain: 0, timebase: 0, snpIdLoop: 0, freqCmd: false, freq: 0 });
+    } else if (act === 'del-seq') {
+      if (!confirm(`Delete sequence ${idx}?`)) return;
+      state.sequences.splice(idx, 1);
+      state.selection = { type: null, index: -1 };
+    } else if (act === 'del-frame') {
+      const i = parseInt(btn2.dataset.i);
+      seq.frames.splice(i, 1);
+    }
+    renderAll();
+  });
+
+  requestAnimationFrame(() => drawSequencePreview(cv, seq));
+  return box;
+};
 
 // Initial render
 renderAll();
