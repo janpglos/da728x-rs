@@ -2,7 +2,7 @@
 name = "da728x"
 version = "0.1.0"
 edition = "2024"
-description = "An async and no_std rust library for the wide-bandwidth haptic driver IC DA7280/DA7281/DA72782 from Renesas."
+description = "An async (and optionally blocking) no_std rust library for the wide-bandwidth haptic driver IC DA7280/DA7281/DA72782 from Renesas."
 authors = ["thedevleon"]
 license = "MIT"
 
@@ -18,9 +18,11 @@ exclude = [
 
 [features]
 debug = ["dep:defmt"]
+blocking = ["maybe-async/is_sync"]
 
 [dependencies]
 embedded-hal-async = "1.0.0"
 embedded-hal = "1.0.0"
 bitfield-struct = "0.12.1"
 defmt = { version = "1.0", optional = true }
+maybe-async = "0.2"

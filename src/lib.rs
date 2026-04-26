@@ -8,8 +8,17 @@ pub mod errors;
 pub mod registers;
 pub mod waveform;
 
+use maybe_async::maybe_async;
+
+#[cfg(not(feature = "blocking"))]
 use embedded_hal_async::i2c::Error as I2cError;
+#[cfg(not(feature = "blocking"))]
 use embedded_hal_async::i2c::I2c;
+
+#[cfg(feature = "blocking")]
+use embedded_hal::i2c::Error as I2cError;
+#[cfg(feature = "blocking")]
+use embedded_hal::i2c::I2c;
 
 #[cfg(feature = "debug")]
 use defmt::{debug, info};
@@ -52,6 +61,7 @@ impl<I2C> DA728x<I2C>
 where
     I2C: I2c,
 {
+    #[maybe_async]
     pub async fn new(i2c: I2C, address: u8, variant: Variant) -> Result<Self, Error>
     where
         I2C: I2c,
@@ -100,6 +110,7 @@ where
     /// There are a lot of inter-dependencies between the actuator config and the device config,
     /// so they need to be set together so that we can figure out if everything can work like configured
     /// And to deal with different value ranges for the registers depending on the driving modes
+    #[maybe_async]
     pub async fn configure(
         &mut self,
         actuator_config: ActuatorConfig,
@@ -316,12 +327,14 @@ where
         Ok(())
     }
 
+    #[maybe_async]
     pub async fn get_chip_rev(&mut self) -> Result<registers::CHIP_REV, Error> {
         let reg = self.read_register(Register::CHIP_REV).await?;
         Ok(CHIP_REV::from(reg))
     }
 
     /// This gets all system events (and also clears them...)
+    #[maybe_async]
     pub async fn get_events(&mut self) -> Result<(IRQ_EVENT1, IRQ_EVENT_WARNING_DIAG, IRQ_EVENT_SEQ_DIAG), Error> {
         let irq_event1 = IRQ_EVENT1::from(self.read_register(Register::IRQ_EVENT1).await?);
         let irq_event_warning_diag = IRQ_EVENT_WARNING_DIAG::from(self.read_register(Register::IRQ_EVENT_WARNING_DIAG).await?);
@@ -334,12 +347,14 @@ where
         Ok((irq_event1, irq_event_warning_diag, irq_event_seq_diag))
     }
 
+    #[maybe_async]
     pub async fn get_status(&mut self) -> Result<IRQ_STATUS1, Error> {
         let status = self.read_register(Register::IRQ_STATUS1).await?;
         Ok(IRQ_STATUS1::from(status))
     }
 
 
+    #[maybe_async]
     pub async fn set_frequency(&mut self, frequency_hz: u16) -> Result<(), Error> {
         if self.actuator_config.is_none() || self.device_config.is_none() {
             return Err(Error::NotConfigured);
@@ -377,6 +392,7 @@ where
     /// This sets the amplitude in the DRO_MODE
     /// With acceleration enabled, this has a range of 0..127
     /// With acceleration disabled, this has a range of -127..127
+    #[maybe_async]
     pub async fn set_override_value(&mut self, value: i8) -> Result<(), Error> {
         if self.actuator_config.is_none() || self.device_config.is_none() {
             return Err(Error::NotConfigured);
@@ -402,6 +418,7 @@ where
     ///
     /// Note: For RTWM/ETWM modes, this enables the mode but does NOT start sequence playback.
     /// Call `play_sequence()` or `start_sequence()` separately after enabling.
+    #[maybe_async]
     pub async fn enable(&mut self) -> Result<(), Error> {
         if self.actuator_config.is_none() || self.device_config.is_none() {
             return Err(Error::NotConfigured);
@@ -424,6 +441,7 @@ where
     }
 
     /// Disable the configured Operation Mode (also stopping haptic feedback)
+    #[maybe_async]
     pub async fn disable(&mut self) -> Result<(), Error> {
         if self.actuator_config.is_none() || self.device_config.is_none() {
             return Err(Error::NotConfigured);
@@ -439,6 +457,7 @@ where
 
     /// Sets a custom drive waveform, see 5.7.6 Custom Waveform Operation
     /// Device needs to be in the CUSTOM_WAVEFORM mode.
+    #[maybe_async]
     pub async fn set_custom_drive_waveform(&mut self, points: [u8; 3]) -> Result<(), Error> {
         if self.actuator_config.is_none() || self.device_config.is_none() {
             return Err(Error::NotConfigured);
@@ -454,6 +473,7 @@ where
         Ok(())
     }
 
+    #[maybe_async]
     async fn read_register(&mut self, register: Register) -> Result<u8, Error> {
         let mut buffer = [0u8; 1];
 
@@ -465,6 +485,7 @@ where
         Ok(buffer[0])
     }
 
+    #[maybe_async]
     async fn write_register(&mut self, register: Register, data: u8) -> Result<(), Error> {
         self.i2c
             .write(self.address, &[register as u8, data])
@@ -475,6 +496,7 @@ where
     /// Write multiple bytes to consecutive memory addresses starting at SNP_MEM_0.
     ///
     /// This is used for uploading waveform memory data.
+    #[maybe_async]
     async fn write_memory_bytes(&mut self, data: &[u8]) -> Result<(), Error> {
         // Write in chunks to avoid buffer overflow
         // Most I2C implementations have limited buffer sizes
@@ -507,6 +529,7 @@ where
     ///
     /// Must be called before uploading waveform memory.
     /// Per datasheet: WAV_MEM_LOCK = 1 means unlocked, 0 means locked.
+    #[maybe_async]
     pub async fn unlock_waveform_memory(&mut self) -> Result<(), Error> {
         let mem_ctl2 = MEM_CTL2::new().with_WAV_MEM_LOCK(true); // 1 = unlocked
         self.write_register(Register::MEM_CTL2, mem_ctl2.into()).await
@@ -516,6 +539,7 @@ where
     ///
     /// Should be called after uploading waveform memory.
     /// Per datasheet: WAV_MEM_LOCK = 0 means locked, 1 means unlocked.
+    #[maybe_async]
     pub async fn lock_waveform_memory(&mut self) -> Result<(), Error> {
         let mem_ctl2 = MEM_CTL2::new().with_WAV_MEM_LOCK(false); // 0 = locked
         self.write_register(Register::MEM_CTL2, mem_ctl2.into()).await
@@ -529,6 +553,7 @@ where
     ///
     /// # Errors
     /// Returns an I2C error if communication fails.
+    #[maybe_async]
     pub async fn upload_waveform_memory(
         &mut self,
         memory: &WaveformMemory,
@@ -556,6 +581,7 @@ where
     ///
     /// # Returns
     /// Number of bytes actually read.
+    #[maybe_async]
     pub async fn read_waveform_memory(&mut self, len: usize, buffer: &mut [u8]) -> Result<usize, Error> {
         let read_len = len.min(100).min(buffer.len());
         for i in 0..read_len {
@@ -578,6 +604,7 @@ where
     ///
     /// # Errors
     /// Returns `InvalidValue` if parameters are out of range.
+    #[maybe_async]
     pub async fn select_sequence(&mut self, sequence_id: u8, loops: u8) -> Result<(), Error> {
         if sequence_id > 15 || loops > 15 {
             return Err(Error::InvalidValue);
@@ -592,6 +619,7 @@ where
     /// Start playback of the selected sequence.
     ///
     /// The device must be in RTWM_MODE and enabled for this to work.
+    #[maybe_async]
     pub async fn start_sequence(&mut self) -> Result<(), Error> {
         let mut top_ctl1 = TOP_CTL1::from(self.read_register(Register::TOP_CTL1).await?);
         top_ctl1 = top_ctl1.with_SEQ_START(true);
@@ -605,6 +633,7 @@ where
     /// # Arguments
     /// * `sequence_id` - Sequence ID (0-15)
     /// * `loops` - Number of times to loop (0-15, where 0 means play once)
+    #[maybe_async]
     pub async fn play_sequence(&mut self, sequence_id: u8, loops: u8) -> Result<(), Error> {
         self.select_sequence(sequence_id, loops).await?;
         self.start_sequence().await

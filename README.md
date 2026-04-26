@@ -28,6 +28,7 @@ An async and no_std rust library for the wide-bandwidth haptic driver IC DA7280/
 
 ## Features
 - `debug` - Enable debug logging with the `defmt` crate
+- `blocking` - Use synchronous/blocking I2C instead of async (uses the `embedded-hal` blocking I2C trait)
 
 
 # Basic Usage
