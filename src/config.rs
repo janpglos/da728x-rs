@@ -2,11 +2,10 @@ use core::option::Option;
 
 #[allow(non_snake_case)]
 #[derive(Debug, Clone, Copy)]
-pub struct ActuatorConfig
-{
+pub struct ActuatorConfig {
     pub actuator_type: ActuatorType,
     pub nominal_max_mV: u16,
-    pub absolute_max_mV: u16, 
+    pub absolute_max_mV: u16,
     pub max_current_mA: u16,
     pub impedance_mOhm: u16,
     pub inductance_uH: u16,
@@ -36,7 +35,7 @@ pub enum OperationMode {
     DRO_MODE = 1,
     PWM_MODE = 2,
     RTWM_MODE = 3,
-    ETWM_MODE = 4
+    ETWM_MODE = 4,
 }
 
 /// According to 5.7 Advanced Operation
@@ -45,6 +44,5 @@ pub enum OperationMode {
 pub enum DrivingMode {
     FREQUENCY_TRACK,
     WIDEBAND,
-    CUSTOM_WAVEFORM
+    CUSTOM_WAVEFORM,
 }
-

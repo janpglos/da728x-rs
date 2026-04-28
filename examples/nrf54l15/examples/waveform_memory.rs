@@ -27,6 +27,7 @@ use static_cell::ConstStaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
 use da728x::waveform::WaveformMemory;
+use da728x::waveform::WaveformMemoryTimebase;
 use da728x::{DA728x, Variant};
 use da728x_examples_common as common;
 
@@ -44,8 +45,8 @@ pub const DA7280_WAVEFORM_MEMORY: WaveformMemory = WaveformMemory::from_bytes(
         0x18, 0x0D, 0x88, 0x05, 0xA8, 0x01, 0x02, 0x18, 0x1E, 0x11, 0x1F, 0x00, 0x19, 0x39, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    ],  //
-    74, // number of bytes in memory 
+    ], //
+    74, // number of bytes in memory
     7,  // number of snippets
     11, // number of sequences
 );
@@ -92,6 +93,12 @@ async fn main(_spawner: Spawner) {
     info!("Uploading waveform memory...");
     haptics
         .upload_waveform_memory(&DA7280_WAVEFORM_MEMORY, false)
+        .await
+        .unwrap();
+
+    // set timebase
+    haptics
+        .set_timebase(WaveformMemoryTimebase::TIMEBASE_136_544_2176_4352)
         .await
         .unwrap();
 

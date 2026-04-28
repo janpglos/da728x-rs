@@ -41,12 +41,12 @@
 //! # Ok::<(), da728x::errors::Error>(())
 //! ```
 
-mod snippet;
 mod frame;
-mod sequence;
 mod memory;
+mod sequence;
+mod snippet;
 
-pub use snippet::{PwlPoint, Snippet, SnippetBuilder};
 pub use frame::{Frame, FrameBuilder, Gain, Timebase};
+pub use memory::{WaveformMemory, WaveformMemoryBuilder, WaveformMemoryTimebase};
 pub use sequence::{Sequence, SequenceBuilder};
-pub use memory::{WaveformMemory, WaveformMemoryBuilder};
+pub use snippet::{PwlPoint, Snippet, SnippetBuilder};

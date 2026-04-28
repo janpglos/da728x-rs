@@ -73,6 +73,15 @@ impl WaveformMemory {
     }
 }
 
+/// FREQ_WAVEFORM_TIMEBASE
+/// Global Timebase for waveform memory.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(nonstandard_style)]
+pub enum WaveformMemoryTimebase {
+    TIMEBASE_544_2176_4352_8704 = 0, // 5.44, 21.76, 43.52, 87.04 ms
+    TIMEBASE_136_544_2176_4352 = 1,  // 1.36, 5.44, 21.76, 43.52 ms
+}
+
 /// Builder for constructing waveform memory.
 ///
 /// # Memory Layout
@@ -377,8 +386,8 @@ mod tests {
         // Header
         assert_eq!(bytes[0], 2); // num_snippets
         assert_eq!(bytes[1], 1); // num_sequences
-                                 // End pointers (absolute indices)
-                                 // Data starts at byte 5 (2 header + 3 pointers)
+        // End pointers (absolute indices)
+        // Data starts at byte 5 (2 header + 3 pointers)
         assert_eq!(bytes[2], 5); // snippet 1 (1 byte at pos 5) ends at index 5
         assert_eq!(bytes[3], 7); // snippet 2 (2 bytes at pos 6-7) ends at index 7
         assert_eq!(bytes[4], 9); // sequence (2 bytes at pos 8-9) ends at index 9
